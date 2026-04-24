@@ -19,7 +19,5 @@ linters-settings:
 
 issues:
   exclude-rules:
-    - linters: [funlen]
-      severity: warning
     - path: _test\.go
       linters: [funlen]

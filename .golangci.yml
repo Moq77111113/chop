@@ -1,0 +1,25 @@
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - misspell
+    - funlen
+
+linters-settings:
+  funlen:
+    lines: 40
+    statements: 30
+
+issues:
+  exclude-rules:
+    - linters: [funlen]
+      severity: warning
+    - path: _test\.go
+      linters: [funlen]

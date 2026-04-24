@@ -1,0 +1,15 @@
+# Go
+/chop
+*.test
+*.out
+coverage.txt
+
+# Vite / Node
+/web/node_modules
+/web/dist
+/web/.vite
+
+# Dev artifacts
+/testdata/*.h264
+session.ndjson
+.DS_Store

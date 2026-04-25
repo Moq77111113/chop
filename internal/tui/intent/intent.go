@@ -67,13 +67,17 @@ func (st Styles) styleFor(sev Severity) lipgloss.Style {
 	return st.Calm
 }
 
-const headerLabel = "STREAM LOOKS LIKE"
+const (
+	headerLabel     = "STREAM LOOKS LIKE"
+	headerDownLabel = "LINK IS DOWN"
+)
 
 // compose picks the highest-severity clause from §6 of DESIGN.md and
 // optionally appends a secondary one. The return is (severity, header, body).
+// A down link gets its own header so the strip reads as a status, not a guess.
 func compose(s Snapshot) (Severity, string, string) {
 	if !s.LinkUp {
-		return Bad, headerLabel, "consumer disconnected. perturbations preserved — they reapply on reconnect."
+		return Bad, headerDownLabel, "consumer disconnected. perturbations preserved — they reapply on reconnect."
 	}
 	clauses := nonZeroClauses(s)
 	if len(clauses) == 0 {

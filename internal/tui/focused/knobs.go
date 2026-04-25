@@ -12,6 +12,7 @@ import (
 const (
 	lossScale     = 100.0  // value 0..30 in pct, snapshot 0..0.30 fraction
 	kbpsToMbps    = 1000.0 // bandwidth knob is Mb/s; wire is kbps
+	bandwidthMax  = 5.0    // bandwidth knob upper bound in Mb/s; >Max is "uncapped" (use ∞)
 	lossWarnAt    = 1.0
 	lossDangerAt  = 15.0
 	latencyWarnAt = 50.0
@@ -31,55 +32,66 @@ func defaultKnobs() [knobCount]knob.Knob {
 
 func lossKnob() knob.Knob {
 	return knob.Knob{
-		Label:    "loss",
-		Min:      0,
-		Max:      30,
-		Step:     0.5,
-		BigStep:  5,
-		Format:   func(v float64) string { return fmt.Sprintf("%.1f%%", v) },
-		Severity: severityBands(lossWarnAt, lossDangerAt),
+		Label:       "loss",
+		Min:         0,
+		Max:         30,
+		Step:        0.5,
+		BigStep:     5,
+		Format:      func(v float64) string { return fmt.Sprintf("%.1f%%", v) },
+		Severity:    severityBands(lossWarnAt, lossDangerAt),
+		ScaleLabels: []string{"0%", "5", "10", "20", "30%"},
 	}
 }
 
 func latencyKnob() knob.Knob {
 	return knob.Knob{
-		Label:    "latency",
-		Min:      0,
-		Max:      500,
-		Step:     10,
-		BigStep:  100,
-		Format:   func(v float64) string { return fmt.Sprintf("%.0f ms", v) },
-		Severity: severityBands(latencyWarnAt, latencyDanger),
+		Label:       "latency",
+		Min:         0,
+		Max:         500,
+		Step:        10,
+		BigStep:     100,
+		Format:      func(v float64) string { return fmt.Sprintf("%.0f ms", v) },
+		Severity:    severityBands(latencyWarnAt, latencyDanger),
+		ScaleLabels: []string{"0", "100", "250", "500ms"},
 	}
 }
 
 func jitterKnob() knob.Knob {
 	return knob.Knob{
-		Label:    "jitter",
-		Min:      0,
-		Max:      150,
-		Step:     5,
-		BigStep:  50,
-		Format:   func(v float64) string { return fmt.Sprintf("±%.0f ms", v) },
-		Severity: severityBands(jitterWarnAt, jitterDanger),
+		Label:       "jitter",
+		Min:         0,
+		Max:         150,
+		Step:        5,
+		BigStep:     50,
+		Format:      func(v float64) string { return fmt.Sprintf("±%.0f ms", v) },
+		Severity:    severityBands(jitterWarnAt, jitterDanger),
+		ScaleLabels: []string{"0", "50", "100", "150ms"},
 	}
 }
 
+// bandwidthKnob axis: left=off (0 Mb/s), right=∞ (uncapped). Initial
+// value and reset target are both Max (∞), since "no impairment" is the
+// canonical neutral state for every chop knob.
 func bandwidthKnob() knob.Knob {
 	return knob.Knob{
-		Label:    "bandwidth",
-		Min:      0,
-		Max:      50,
-		Step:     0.1,
-		BigStep:  1,
-		Inverted: true,
+		Label:   "bandwidth",
+		Value:   bandwidthMax,
+		Min:     0,
+		Max:     bandwidthMax,
+		Step:    0.1,
+		BigStep: 0.5,
+		ResetTo: bandwidthMax,
 		Format: func(v float64) string {
-			if v == 0 {
+			if v >= bandwidthMax {
 				return "∞"
+			}
+			if v <= 0 {
+				return "off"
 			}
 			return fmt.Sprintf("%.1f Mb/s", v)
 		},
-		Severity: bandwidthSeverity,
+		Severity:    bandwidthSeverity,
+		ScaleLabels: []string{"off", "1M", "2.5M", "∞"},
 	}
 }
 
@@ -95,9 +107,11 @@ func severityBands(warn, danger float64) func(float64) knob.Severity {
 	}
 }
 
+// bandwidthSeverity reads the slider as "amount of bandwidth allowed":
+// at or near Max → ample (OK), middling → warn, near zero → danger.
 func bandwidthSeverity(v float64) knob.Severity {
 	switch {
-	case v == 0 || v > 5:
+	case v >= bandwidthMax/2:
 		return knob.SevOK
 	case v >= 1:
 		return knob.SevWarn

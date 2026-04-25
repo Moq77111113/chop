@@ -12,31 +12,40 @@ import (
 
 // newListStyles builds the linklist palette from the chop theme tokens.
 func newListStyles(t Theme) linklist.Styles {
+	rowBase := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		MarginBottom(1)
 	return linklist.Styles{
-		Header:   lipgloss.NewStyle().Foreground(t.Muted).Bold(true).MarginBottom(1),
-		Type:     lipgloss.NewStyle().Foreground(t.Dim),
-		Selected: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
-		Summary:  lipgloss.NewStyle().Foreground(t.Dim),
-		Spark:    lipgloss.NewStyle().Foreground(t.Primary),
-		Empty:    lipgloss.NewStyle().Foreground(t.Dim).Italic(true),
-		StateUp:  lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
-		StateDeg: lipgloss.NewStyle().Foreground(t.Warn).Bold(true),
-		StateBad: lipgloss.NewStyle().Foreground(t.Danger).Bold(true),
+		Header:           lipgloss.NewStyle().Foreground(t.Muted).Bold(true).MarginBottom(1),
+		Type:             lipgloss.NewStyle().Foreground(t.Dim),
+		Title:            lipgloss.NewStyle().Foreground(t.Fg).Bold(true),
+		Selected:         lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		Summary:          lipgloss.NewStyle().Foreground(t.Dim),
+		Spark:            lipgloss.NewStyle().Foreground(t.Primary),
+		Empty:            lipgloss.NewStyle().Foreground(t.Dim).Italic(true),
+		StateUp:          lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		StateDeg:         lipgloss.NewStyle().Foreground(t.Warn).Bold(true),
+		StateBad:         lipgloss.NewStyle().Foreground(t.Danger).Bold(true),
+		RowFrame:         rowBase.BorderForeground(t.Line),
+		RowFrameSelected: rowBase.BorderForeground(t.Primary),
+		EmptyArt:         lipgloss.NewStyle().Foreground(t.Dim),
+		EmptyText:        lipgloss.NewStyle().Foreground(t.Muted),
+		ExampleFrame:     lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.Line2).Padding(0, 1),
+		ExamplePrompt:    lipgloss.NewStyle().Foreground(t.Dim),
+		ExampleCommand:   lipgloss.NewStyle().Foreground(t.Fg),
+		ExampleArg:       lipgloss.NewStyle().Foreground(t.Primary),
 	}
 }
 
-// newHelpStyles builds the help-overlay palette. Key tokens use a small
-// rounded border so individual keystrokes read like physical keys.
+// newHelpStyles builds the help-overlay palette. Plain inline keys: bold
+// primary-colored tokens, no borders — bordered keys broke vertical layout.
 func newHelpStyles(t Theme) help.Styles {
 	return help.Styles{
 		Border: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.Line2).Padding(1, 2),
-		Title:  lipgloss.NewStyle().Foreground(t.Fg).Bold(true),
-		Group:  lipgloss.NewStyle().Foreground(t.Muted).Bold(true).MarginTop(1),
-		Key: lipgloss.NewStyle().
-			Foreground(t.Fg).
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(t.Line2).
-			Padding(0, 1),
+		Title:  lipgloss.NewStyle().Foreground(t.Fg).Bold(true).MarginBottom(1),
+		Group:  lipgloss.NewStyle().Foreground(t.Muted).Bold(true),
+		Key:    lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
 		Desc:   lipgloss.NewStyle().Foreground(t.Fg),
 		Subtle: lipgloss.NewStyle().Foreground(t.Dim).Italic(true),
 	}

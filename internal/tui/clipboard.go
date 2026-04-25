@@ -9,7 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const toastDuration = 2500 * time.Millisecond
+const (
+	toastDuration = 2500 * time.Millisecond
+	copyCmdPrefix = "chop run --override "
+)
 
 type toastClearMsg struct{}
 
@@ -26,15 +29,27 @@ func (a *App) copyAsFlagsCmd() tea.Cmd {
 	if !ok {
 		return a.showToastCmd("waiting on first snapshot…")
 	}
-	flag := formatOverrideFlag(id, snap)
-	if err := clipboard.WriteAll(flag); err != nil {
+	cmd := copyCmdPrefix + formatOverrideFlag(id, snap)
+	if err := clipboard.WriteAll(cmd); err != nil {
 		return a.showToastCmd("clipboard unavailable: " + err.Error())
 	}
-	return a.showToastCmd("copied · " + flag)
+	return a.showCopyToastCmd(cmd)
 }
 
 func (a *App) showToastCmd(msg string) tea.Cmd {
 	a.ui.toastMsg = msg
+	a.ui.toastFlag = ""
+	a.ui.toastUntil = time.Now().Add(toastDuration)
+	return tea.Tick(toastDuration, func(time.Time) tea.Msg { return toastClearMsg{} })
+}
+
+// showCopyToastCmd renders the rich copy-as-flags toast: success chip on
+// the left, the would-be CLI invocation in the middle, "paste anywhere"
+// hint on the right. The flag content is the override the user can paste
+// into a future `chop run`.
+func (a *App) showCopyToastCmd(flag string) tea.Cmd {
+	a.ui.toastMsg = "copied"
+	a.ui.toastFlag = flag
 	a.ui.toastUntil = time.Now().Add(toastDuration)
 	return tea.Tick(toastDuration, func(time.Time) tea.Msg { return toastClearMsg{} })
 }

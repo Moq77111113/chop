@@ -59,11 +59,17 @@ func (m *Model) SetLink(id, typ string) {
 
 // SetSnapshot pushes fresh values into the knobs. Called on every refresh
 // tick so the knobs reflect the live state seen by the supervisor.
+// BandwidthKbps == 0 is the wire's "no shaping" sentinel; we display it
+// at the ∞ end of the slider (Max).
 func (m *Model) SetSnapshot(s Snapshot) {
 	m.knobs[KnobLoss].Value = s.Loss * lossScale
 	m.knobs[KnobLatency].Value = float64(s.LatencyMs)
 	m.knobs[KnobJitter].Value = float64(s.JitterMs)
-	m.knobs[KnobBandwidth].Value = float64(s.BandwidthKbps) / kbpsToMbps
+	if s.BandwidthKbps == 0 {
+		m.knobs[KnobBandwidth].Value = m.knobs[KnobBandwidth].Max
+	} else {
+		m.knobs[KnobBandwidth].Value = float64(s.BandwidthKbps) / kbpsToMbps
+	}
 }
 
 // Knob returns a copy of the knob at idx for inspection.
@@ -106,11 +112,16 @@ func (m *Model) ResetAll() Snapshot {
 }
 
 func (m *Model) toSnapshot() Snapshot {
+	bw := m.knobs[KnobBandwidth]
+	bwKbps := uint32(bw.Value * kbpsToMbps)
+	if bw.Value >= bw.Max {
+		bwKbps = 0 // wire sentinel for "no shaping"
+	}
 	return Snapshot{
 		Loss:          m.knobs[KnobLoss].Value / lossScale,
 		LatencyMs:     uint32(m.knobs[KnobLatency].Value),
 		JitterMs:      uint32(m.knobs[KnobJitter].Value),
-		BandwidthKbps: uint32(m.knobs[KnobBandwidth].Value * kbpsToMbps),
+		BandwidthKbps: bwKbps,
 	}
 }
 

@@ -32,9 +32,9 @@ type Styles struct {
 }
 
 const (
-	cardWidth      = 60
-	keyCellWidth   = 22
-	keyTokenSep    = " "
+	cardWidth   = 64
+	keyColWidth = 18
+	leftIndent  = "  "
 )
 
 // Render draws the help card at width × height. If the available area is
@@ -48,39 +48,23 @@ func Render(groups []Group, st Styles, width, height int) string {
 func bodyLines(groups []Group, st Styles) string {
 	var lines []string
 	lines = append(lines, st.Title.Render("chop · keymap"))
-	lines = append(lines, "")
-	for _, g := range groups {
+	for i, g := range groups {
+		if i > 0 {
+			lines = append(lines, "")
+		}
 		lines = append(lines, st.Group.Render(strings.ToUpper(g.Title)))
 		for _, b := range g.Bindings {
 			lines = append(lines, formatBinding(b, st))
 		}
-		lines = append(lines, "")
 	}
-	lines = append(lines, st.Subtle.Render("? or esc to close"))
+	lines = append(lines, "", st.Subtle.Render("? or esc to close"))
 	return strings.Join(lines, "\n")
 }
 
+// formatBinding draws one row: "  <keys padded to keyColWidth>  <desc>".
+// Keys are bold-colored inline tokens; no borders, no multi-line cells.
 func formatBinding(b Binding, st Styles) string {
-	keyCell := renderKeyCells(b.Keys, st)
-	pad := strings.Repeat(" ", max(2, keyCellWidth-lipgloss.Width(keyCell)))
-	return "  " + keyCell + pad + st.Desc.Render(b.Desc)
+	keyCell := st.Key.Render(b.Keys)
+	pad := max(1, keyColWidth-lipgloss.Width(keyCell))
+	return leftIndent + keyCell + strings.Repeat(" ", pad) + st.Desc.Render(b.Desc)
 }
-
-// renderKeyCells splits a Keys string on whitespace, then renders the
-// modifier-free tokens as small bordered boxes and leaves separators
-// like "/" or "or" as plain text — matching the design's keys-as-keys
-// look.
-func renderKeyCells(keys string, st Styles) string {
-	tokens := strings.Fields(keys)
-	parts := make([]string, 0, len(tokens))
-	for _, tok := range tokens {
-		if isSeparator(tok) {
-			parts = append(parts, st.Desc.Render(tok))
-			continue
-		}
-		parts = append(parts, st.Key.Render(tok))
-	}
-	return strings.Join(parts, keyTokenSep)
-}
-
-func isSeparator(tok string) bool { return tok == "/" || tok == "or" }

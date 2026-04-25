@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moq77111113/chop/block"
 	"github.com/moq77111113/chop/internal/supervisor"
@@ -78,11 +81,7 @@ func (a *App) fetchCmd() tea.Cmd {
 				state = mapState(snap.Status)
 				decodeSnapshot(h, snap, links, sources)
 			}
-			row := linklist.Row{ID: h.ID, Type: h.Type, State: state}
-			if ls, ok := links[h.ID]; ok {
-				row.KnobsSummary = formatKnobsSummary(ls)
-			}
-			rows = append(rows, row)
+			rows = append(rows, linklist.Row{ID: h.ID, Type: h.Type, State: state})
 		}
 		return rowsMsg{rows: rows, links: links, sources: sources}
 	}
@@ -102,20 +101,95 @@ func (a *App) applyRowsMsg(msg rowsMsg) {
 	a.syncFocusedFromList()
 }
 
-// enrichRows decorates each row with its formatted Mb/s rate and the
-// sparkline of recent samples. Rows without a known rate yet (first tick,
-// non-link blocks) keep the fields empty and render single-line.
+// enrichRows decorates each row with its formatted Mb/s rate, the
+// sparkline of recent samples, and the topology title (`src → link`).
+// Rows without a known rate yet (first tick, non-link blocks) keep the
+// fields empty and render single-line. Down/stopped links render their
+// rate as `— Mb/s` so the column reads as "no signal" rather than blank.
+// The knobs summary is pre-styled here (labels muted, values fg/danger)
+// so the linklist renderer can drop it in raw without re-applying a dim
+// blanket that would erase the per-token emphasis.
 func (a *App) enrichRows(rows []linklist.Row, rates map[string]float64) []linklist.Row {
+	titles := a.linkTitles(rows)
 	for i, r := range rows {
-		mbps, ok := rates[r.ID]
-		if ok {
-			rows[i].Rate = fmt.Sprintf("%.1f Mb/s", mbps)
+		if t, ok := titles[r.ID]; ok {
+			rows[i].Title = t
+		}
+		switch r.State {
+		case linklist.StateDown, linklist.StateStopped:
+			rows[i].Rate = downRateLabel
+		default:
+			if mbps, ok := rates[r.ID]; ok {
+				rows[i].Rate = fmt.Sprintf("%.1f Mb/s", mbps)
+			}
 		}
 		if hist, hasHist := a.data.history[r.ID]; hasHist {
 			rows[i].Sparkline = renderSparkline(hist)
 		}
+		if ls, ok := a.data.links[r.ID]; ok {
+			rows[i].KnobsSummary = a.styleKnobsSummary(ls, r.State)
+		}
 	}
 	return rows
+}
+
+const downRateLabel = "— Mb/s"
+
+// linkTitles maps each link block id to a "<source-id> → <link-id>"
+// label by matching its upstream URL host:port against the listen
+// host:port of source blocks. Links with no matching source keep their
+// id as the title (handled by the renderer's fallback).
+func (a *App) linkTitles(rows []linklist.Row) map[string]string {
+	sourceByListen := map[string]string{}
+	for _, r := range rows {
+		if r.Type != blockTypeSource {
+			continue
+		}
+		if listen := parseSourceListen(a.configs[r.ID]); listen != "" {
+			sourceByListen[listen] = r.ID
+		}
+	}
+	titles := map[string]string{}
+	for _, r := range rows {
+		if r.Type != blockTypeLink {
+			continue
+		}
+		host := parseLinkUpstreamHost(a.configs[r.ID])
+		if src, ok := sourceByListen[host]; ok {
+			titles[r.ID] = src + " → " + r.ID
+		}
+	}
+	return titles
+}
+
+func parseSourceListen(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var sc struct {
+		Listen string `json:"listen"`
+	}
+	if json.Unmarshal(raw, &sc) != nil {
+		return ""
+	}
+	return sc.Listen
+}
+
+func parseLinkUpstreamHost(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var lc struct {
+		Upstream string `json:"upstream"`
+	}
+	if json.Unmarshal(raw, &lc) != nil || lc.Upstream == "" {
+		return ""
+	}
+	u, err := url.Parse(lc.Upstream)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Host
 }
 
 func decodeSnapshot(h *supervisor.Handle, snap block.Snapshot, links map[string]linkSnapshot, sources map[string]sourceSnapshot) {
@@ -165,24 +239,67 @@ func computeRates(prev, cur map[string]linkSnapshot, dt time.Duration) map[strin
 	return rates
 }
 
-// formatKnobsSummary builds the second-line dim summary for a link row,
-// e.g. `loss 12% lat 200ms jit ±45ms bw 1.5M`. Bandwidth 0 prints as `∞`
-// to match the bandwidth knob's "off" semantics.
-func formatKnobsSummary(s linkSnapshot) string {
+// knobValues holds the four per-knob value tokens as they should appear
+// in the row sub-line (e.g. `12%`, `200ms`, `±45ms`, `1.5M`). Splitting
+// the format from the styling lets us drive both a plain-text test path
+// and the lipgloss-styled render path off the same source of truth.
+type knobValues struct {
+	loss, latency, jitter, bandwidth string
+	bandwidthOff                     bool // bw == ∞ or — → render dim
+}
+
+func computeKnobValues(s linkSnapshot, st linklist.State) knobValues {
 	const (
 		percentScale = 100
 		kbpsToMbps   = 1000
 	)
-	bw := "∞"
-	if s.Controls.BandwidthKbps > 0 {
-		bw = fmt.Sprintf("%.1fM", float64(s.Controls.BandwidthKbps)/kbpsToMbps)
+	v := knobValues{
+		loss:    fmt.Sprintf("%d%%", int(s.Controls.Loss*percentScale+0.5)),
+		latency: fmt.Sprintf("%dms", s.Controls.LatencyMs),
+		jitter:  fmt.Sprintf("±%dms", s.Controls.JitterMs),
 	}
-	return fmt.Sprintf("loss %d%% lat %dms jit ±%dms bw %s",
-		int(s.Controls.Loss*percentScale+0.5),
-		s.Controls.LatencyMs,
-		s.Controls.JitterMs,
-		bw,
-	)
+	switch {
+	case st == linklist.StateDown || st == linklist.StateStopped:
+		v.bandwidth = "—"
+		v.bandwidthOff = true
+	case s.Controls.BandwidthKbps == 0:
+		v.bandwidth = "∞"
+		v.bandwidthOff = true
+	default:
+		v.bandwidth = fmt.Sprintf("%.1fM", float64(s.Controls.BandwidthKbps)/kbpsToMbps)
+	}
+	return v
+}
+
+// styleKnobsSummary builds the per-row "loss 12% lat 200ms jit ±45ms bw 1.5M"
+// strip with labels in Muted and each value styled by salience: zero values
+// stay Dim, non-zero values pop to Fg, everything goes Danger when the link
+// is down. The result is pre-rendered ANSI so the linklist renderer must
+// not re-wrap it in a blanket Foreground style.
+func (a *App) styleKnobsSummary(s linkSnapshot, st linklist.State) string {
+	v := computeKnobValues(s, st)
+	label := lipgloss.NewStyle().Foreground(a.theme.Muted)
+	dim := lipgloss.NewStyle().Foreground(a.theme.Dim)
+	bright := lipgloss.NewStyle().Foreground(a.theme.Fg).Bold(true)
+	danger := lipgloss.NewStyle().Foreground(a.theme.Danger).Bold(true)
+
+	down := st == linklist.StateDown || st == linklist.StateStopped
+	val := func(token string, zero bool) string {
+		switch {
+		case down:
+			return danger.Render(token)
+		case zero:
+			return dim.Render(token)
+		}
+		return bright.Render(token)
+	}
+
+	return strings.Join([]string{
+		label.Render("loss") + " " + val(v.loss, s.Controls.Loss == 0),
+		label.Render("lat") + " " + val(v.latency, s.Controls.LatencyMs == 0),
+		label.Render("jit") + " " + val(v.jitter, s.Controls.JitterMs == 0),
+		label.Render("bw") + " " + val(v.bandwidth, v.bandwidthOff && !down),
+	}, " ")
 }
 
 // resetAllCmd PATCHes every link block with zeroed controls. The local

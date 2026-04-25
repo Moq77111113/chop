@@ -37,12 +37,17 @@ func (a *App) titlebarLeft() string {
 	dot := lipgloss.NewStyle().Foreground(a.theme.Primary).Render("●")
 	name := a.theme.Title.Render("chop")
 	ipa := a.theme.Subtle.Render("/tʃɒp/")
-	return strings.Join([]string{
-		dot + " " + name,
-		ipa,
-		a.theme.Subtle.Render(a.titlebarSummary()),
-	}, titleSeparator)
+	parts := []string{dot + " " + name, ipa}
+	if !a.isNarrow() {
+		parts = append(parts, a.theme.Subtle.Render(a.titlebarSummary()))
+	}
+	return strings.Join(parts, titleSeparator)
 }
+
+// isNarrow returns true when the terminal is too tight to stack panes
+// horizontally; the same threshold drives both the body stacking and
+// the titlebar's metadata trim so the two stay in sync.
+func (a *App) isNarrow() bool { return a.width <= narrowThreshold }
 
 func (a *App) titlebarSummary() string {
 	rows := a.list.Rows()
@@ -62,6 +67,9 @@ func (a *App) titlebarSummary() string {
 }
 
 func (a *App) titlebarRight() string {
+	if a.isNarrow() {
+		return ""
+	}
 	rows := a.list.Rows()
 	parts := []string{time.Now().Format("15:04:05")}
 	if len(rows) > 0 {
@@ -74,7 +82,11 @@ func (a *App) titlebarRight() string {
 }
 
 func (a *App) body() string {
-	bodyHeight := max(a.height-2, 1)
+	chrome := 2
+	if a.ui.toastMsg != "" {
+		chrome++
+	}
+	bodyHeight := max(a.height-chrome, 1)
 	if a.ui.coachOpen {
 		return renderCoach(a.width, bodyHeight, a.theme)
 	}
@@ -147,7 +159,7 @@ func (a *App) rightPaneContent(width, height int) string {
 	rows := a.list.Rows()
 	idx := a.list.Selected()
 	if idx < 0 || idx >= len(rows) {
-		return a.theme.Subtle.Render("no block selected")
+		return a.renderEmptySelection(width, height)
 	}
 	r := rows[idx]
 	url := a.consumableURL(r.ID)
@@ -159,20 +171,31 @@ func (a *App) rightPaneContent(width, height int) string {
 		}
 		return body
 	case blockTypeSource:
-		return a.renderSourcePane(r, url)
+		return a.renderSourcePane(r, url, width)
 	}
 	return a.theme.Subtle.Render("unknown block type: " + r.Type)
 }
 
-func (a *App) renderSourcePane(r linklist.Row, url string) string {
+const sourceCardLabel = "STREAM SOURCE"
+
+// renderSourcePane mirrors the link pane's vertical rhythm — header on
+// top, calm-bordered card with the explanatory copy, then live stats —
+// so a source selection doesn't read as a different screen.
+func (a *App) renderSourcePane(r linklist.Row, url string, width int) string {
 	header := a.styles.focus.Header.Render(strings.ToUpper(r.ID)) + " " + a.styles.focus.Subtle.Render("("+r.Type+")")
-	note := lipgloss.NewStyle().Foreground(a.theme.Muted).Italic(true).Render(sourceNoteMsg)
-	parts := []string{header, ""}
+	cardW := max(width, 1)
+	cardBody := lipgloss.NewStyle().Foreground(a.theme.Primary).Bold(true).Render(sourceCardLabel) + "\n" +
+		lipgloss.NewStyle().Foreground(a.theme.Fg).Render(sourceNoteMsg)
 	if url != "" {
-		parts = append(parts, a.theme.Subtle.Render("consume from "+url), "")
+		cardBody += "\n" + a.theme.Subtle.Render("consume from "+url)
 	}
-	parts = append(parts, note, "", a.sourceStats(r.ID))
-	return strings.Join(parts, "\n")
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(a.theme.Line2).
+		Padding(0, 1).
+		Width(cardW).
+		Render(cardBody)
+	return strings.Join([]string{header, "", card, "", a.sourceStats(r.ID)}, "\n")
 }
 
 func (a *App) sourceStats(id string) string {
@@ -194,7 +217,13 @@ func (a *App) sourceStats(id string) string {
 }
 
 // leftPaneContent stacks the link list on top of the events ticker.
+// Narrow mode drops the ticker — there's not enough room for the four
+// columns to read, and the focused pane below already carries the
+// per-link narrative.
 func (a *App) leftPaneContent(width, height int) string {
+	if a.isNarrow() {
+		return a.list.Render(a.styles.list, width, height)
+	}
 	feed := renderEventsTicker(a.data.events, a.styles.events, width)
 	if feed == "" {
 		return a.list.Render(a.styles.list, width, height)
@@ -216,19 +245,94 @@ func rightPaneWidth(total int) int {
 }
 
 func (a *App) statusbar() string {
-	if a.ui.toastMsg != "" {
-		return lipgloss.NewStyle().
-			Width(a.width).
-			Foreground(a.theme.Bg).
-			Background(a.theme.Primary).
-			Bold(true).
-			Padding(0, 1).
-			Render(a.ui.toastMsg)
-	}
 	hints := a.statusHints()
 	return a.theme.Statusbar.
 		Width(a.width).
 		Background(a.theme.Bg1).
 		Padding(0, 1).
 		Render(strings.Join(hints, titleSeparator))
+}
+
+// renderEmptySelection is the right-pane counterpart to the link list's
+// empty card: a "SELECTED · —" header above a hint that nothing is wired
+// up yet. Mirrors the wording in design/screens/01-empty.png.
+func (a *App) renderEmptySelection(width, height int) string {
+	header := a.styles.focus.Header.Render("SELECTED") + " " + a.styles.focus.Subtle.Render("· —")
+	body := a.theme.Subtle.Render("no link selected.") + "\n\n" +
+		a.theme.Subtle.Render("controls appear here once a source attaches.")
+	stack := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
+	if height <= 0 {
+		return stack
+	}
+	return lipgloss.Place(width, height, lipgloss.Right, lipgloss.Center, stack)
+}
+
+// toastBanner is the transient row rendered above the statusbar. Two
+// flavours: a simple centered pill for one-line messages (errors, hints),
+// and the richer copy-as-flags card — chip + truncated CLI + paste hint.
+func (a *App) toastBanner() string {
+	if a.ui.toastFlag != "" {
+		return a.copyToastBanner()
+	}
+	badge := lipgloss.NewStyle().
+		Foreground(a.theme.Bg).
+		Background(a.theme.Primary).
+		Bold(true).
+		Padding(0, 1).
+		Render("✓ " + a.ui.toastMsg)
+	return lipgloss.PlaceHorizontal(a.width, lipgloss.Center, badge,
+		lipgloss.WithWhitespaceBackground(a.theme.Bg1))
+}
+
+const (
+	copyToastPasteHint = "· paste anywhere"
+	copyToastEllipsis  = "…"
+	copyToastChromeW   = 8 // chip + gaps + dim hint padding budget
+)
+
+// copyToastBanner renders the rich copy-as-flags card centered above the
+// statusbar: green "✓ copied" chip on the left, the would-be CLI prefixed
+// with `chop run --override …` in the middle (truncated with ellipsis to
+// fit width), and a dim "· paste anywhere" hint on the right.
+func (a *App) copyToastBanner() string {
+	chip := lipgloss.NewStyle().
+		Foreground(a.theme.Bg).
+		Background(a.theme.Primary).
+		Bold(true).
+		Padding(0, 1).
+		Render("✓ " + a.ui.toastMsg)
+	hint := lipgloss.NewStyle().Foreground(a.theme.Dim).Italic(true).Render(copyToastPasteHint)
+	cmdW := max(a.width-lipgloss.Width(chip)-lipgloss.Width(hint)-copyToastChromeW, 8)
+	cmd := truncateMiddle(a.ui.toastFlag, cmdW)
+	cmdBox := lipgloss.NewStyle().
+		Foreground(a.theme.Fg).
+		Background(a.theme.Bg2).
+		Padding(0, 1).
+		Render(cmd)
+	row := lipgloss.JoinHorizontal(lipgloss.Center, chip, " ", cmdBox, " ", hint)
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(a.theme.Primary).
+		Padding(0, 1).
+		Render(row)
+	return lipgloss.PlaceHorizontal(a.width, lipgloss.Center, card,
+		lipgloss.WithWhitespaceBackground(a.theme.Bg1))
+}
+
+// truncateMiddle clips an ANSI-free string to width with a trailing
+// ellipsis. Used by the copy toast — the override flag's prefix carries
+// the most identifying info (block id, loss), so we keep the head and
+// drop the tail rather than the other way around.
+func truncateMiddle(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	if width <= lipgloss.Width(copyToastEllipsis) {
+		return copyToastEllipsis
+	}
+	keep := width - lipgloss.Width(copyToastEllipsis)
+	return s[:keep] + copyToastEllipsis
 }

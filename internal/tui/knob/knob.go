@@ -18,19 +18,21 @@ const (
 	SevDanger
 )
 
-// Knob describes one slider's data and behavior. Inverted reverses the
-// fill direction so a "0 = off / unlimited" knob (e.g. bandwidth) reads
-// full at zero and empties as the value climbs.
+// Knob describes one slider's data and behavior. ResetTo, when non-zero,
+// is the value Zero() reverts to (defaults to Min — fine for impairment
+// knobs where 0 is "no impairment", but bandwidth uses Max as its
+// neutral). ScaleLabels overrides the auto-generated tick labels.
 type Knob struct {
-	Label    string
-	Value    float64
-	Min      float64
-	Max      float64
-	Step     float64
-	BigStep  float64
-	Inverted bool
-	Format   func(float64) string
-	Severity func(float64) Severity
+	Label       string
+	Value       float64
+	Min         float64
+	Max         float64
+	Step        float64
+	BigStep     float64
+	ResetTo     float64
+	Format      func(float64) string
+	Severity    func(float64) Severity
+	ScaleLabels []string
 }
 
 // Adjust returns a copy with Value clamped after delta is applied.
@@ -46,9 +48,14 @@ func (k Knob) Adjust(delta float64) Knob {
 	return k
 }
 
-// Zero returns a copy with Value reset to Min.
+// Zero returns a copy with Value reset to ResetTo (or Min if ResetTo is
+// the zero value of float64, which is the conventional "neutral" for
+// impairment knobs anyway).
 func (k Knob) Zero() Knob {
-	k.Value = k.Min
+	k.Value = k.ResetTo
+	if k.ResetTo == 0 {
+		k.Value = k.Min
+	}
 	return k
 }
 
@@ -109,10 +116,7 @@ func renderHeader(k Knob, st Styles, width int, focused bool, sev Severity) stri
 func renderTrack(k Knob, st Styles, width int, sev Severity, focused bool) string {
 	fillCount := 0
 	if k.Max > k.Min {
-		ratio := (k.Value - k.Min) / (k.Max - k.Min)
-		if k.Inverted {
-			ratio = 1 - ratio
-		}
+		ratio := clamp01((k.Value - k.Min) / (k.Max - k.Min))
 		fillCount = max(0, min(width, int(ratio*float64(width)+0.5)))
 	}
 	fill := st.Fill[sev].Render(strings.Repeat(trackFillChar, fillCount))
@@ -125,23 +129,63 @@ func renderTrack(k Knob, st Styles, width int, sev Severity, focused bool) strin
 }
 
 func renderScale(k Knob, st Styles, width int) string {
-	if k.Max <= k.Min {
+	if k.Max <= k.Min || width <= 0 {
 		return ""
 	}
-	ticks := []float64{k.Min, k.Min + (k.Max-k.Min)*0.25, k.Min + (k.Max-k.Min)*0.5, k.Min + (k.Max-k.Min)*0.75, k.Max}
-	labels := make([]string, len(ticks))
+	labels := k.ScaleLabels
+	if len(labels) == 0 {
+		labels = autoLabels(k)
+	}
+	if !labelsFit(labels, width) {
+		return ""
+	}
+	return st.Scale.Render(" " + placeLabels(labels, width))
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func autoLabels(k Knob) []string {
+	ticks := []float64{k.Min, k.Min + (k.Max-k.Min)*0.5, k.Max}
+	out := make([]string, len(ticks))
 	for i, t := range ticks {
-		labels[i] = k.Format(t)
+		out[i] = k.Format(t)
 	}
-	cells := make([]string, width)
-	for i := range cells {
-		cells[i] = " "
+	return out
+}
+
+func labelsFit(labels []string, width int) bool {
+	total := 0
+	for _, l := range labels {
+		total += lipgloss.Width(l)
 	}
+	// Need at least one space between adjacent labels.
+	return total+max(len(labels)-1, 0) <= width
+}
+
+// placeLabels distributes labels across width, anchored at proportional
+// positions, then concatenates. Multi-byte runes (±, ∞, /) keep their
+// visual width thanks to lipgloss.Width — no byte-by-byte slicing.
+func placeLabels(labels []string, width int) string {
+	if len(labels) == 1 {
+		return labels[0]
+	}
+	var b strings.Builder
+	cursor := 0
 	for i, label := range labels {
-		pos := int(float64(i) / float64(len(ticks)-1) * float64(width-len(label)))
-		for j := 0; j < len(label) && pos+j < width; j++ {
-			cells[pos+j] = string(label[j])
+		target := max(cursor, int(float64(i)/float64(len(labels)-1)*float64(width-lipgloss.Width(label))))
+		if pad := target - cursor; pad > 0 {
+			b.WriteString(strings.Repeat(" ", pad))
 		}
+		b.WriteString(label)
+		cursor = target + lipgloss.Width(label)
 	}
-	return st.Scale.Render(" " + strings.Join(cells, ""))
+	return b.String()
 }

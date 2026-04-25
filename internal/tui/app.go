@@ -27,6 +27,7 @@ type uiState struct {
 	confirmReset bool
 	coachOpen    bool
 	toastMsg     string
+	toastFlag    string // populated only for the copy-as-flags rich toast
 	toastUntil   time.Time
 	firstReady   bool
 }
@@ -111,6 +112,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toastClearMsg:
 		if !a.ui.toastUntil.IsZero() && !time.Now().Before(a.ui.toastUntil) {
 			a.ui.toastMsg = ""
+			a.ui.toastFlag = ""
 			a.ui.toastUntil = time.Time{}
 		}
 	}
@@ -121,11 +123,12 @@ func (a *App) View() string {
 	if a.width == 0 {
 		return a.theme.Subtle.Render(bootMessage)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left,
-		a.titlebar(),
-		a.body(),
-		a.statusbar(),
-	)
+	parts := []string{a.titlebar(), a.body()}
+	if a.ui.toastMsg != "" {
+		parts = append(parts, a.toastBanner())
+	}
+	parts = append(parts, a.statusbar())
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // consumableURL returns the rtsp endpoint a downstream consumer (ffplay,

@@ -14,12 +14,19 @@ const (
 	coachWidthMax = 50
 )
 
-// coachHints are the three numbered tips first-run users see. Short,
-// imperative, ordered by the natural exploration path.
-var coachHints = []string{
-	"press ↵ or tab to drill into the knobs",
-	"press ←→ to push a knob, watch the picture react",
-	"press y to copy the current perturbation as a --override flag",
+// coachHint is one balloon's contents: a one-line headline and a
+// secondary cue that names the relevant key. Matches the three-balloon
+// pattern in design/screens/05-coach.png.
+type coachHint struct {
+	title, cue string
+}
+
+// coachHints are the three first-run tips, ordered by the exploration
+// path: pick a link → adjust a knob → escape the wall of perturbations.
+var coachHints = []coachHint{
+	{"this is the link you're poking", "↕ to pick another"},
+	{"the focused knob — ↔ adjusts, tab cycles", ""},
+	{"visible undo. always here.", "press any key to dismiss"},
 }
 
 // shouldShowCoach returns true when no seen-marker exists in the user's
@@ -56,28 +63,42 @@ func seenFilePath() (string, error) {
 	return filepath.Join(dir, chopConfigDir, seenFileName), nil
 }
 
-// renderCoach draws the centered coach card over the body area.
+// renderCoach paints three stacked green balloons centered over the body.
+// Anchored callouts (per design/screens/05-coach.png) would need geometry
+// tracking on every framed element — deferred. The stacked variant carries
+// the same copy and dismissal semantics with one tenth of the layout work.
 func renderCoach(width, height int, theme Theme) string {
-	cardW := min(coachWidthMax, max(width-4, 10))
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Primary).
-		Padding(1, 2).
-		Width(cardW)
-
-	title := lipgloss.NewStyle().Foreground(theme.Primary).Bold(true).Render("welcome to chop")
-	subtitle := lipgloss.NewStyle().Foreground(theme.Dim).Italic(true).Render("any key dismisses this card")
-	step := lipgloss.NewStyle().Foreground(theme.Primary).Bold(true)
-	body := lipgloss.NewStyle().Foreground(theme.Fg)
-
-	lines := []string{title, ""}
-	for i, hint := range coachHints {
-		lines = append(lines, step.Render(numberedPrefix(i+1))+" "+body.Render(hint))
+	balloonW := min(coachWidthMax, max(width-4, 12))
+	balloons := make([]string, 0, len(coachHints))
+	for i, h := range coachHints {
+		balloons = append(balloons, renderCoachBalloon(i+1, h, theme, balloonW))
 	}
-	lines = append(lines, "", subtitle)
+	stack := strings.Join(balloons, "\n")
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, stack)
+}
 
-	card := style.Render(strings.Join(lines, "\n"))
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, card)
+// renderCoachBalloon draws one balloon: numbered chip on the left, the
+// hint title and optional cue stacked on the right. Background fills so
+// the green call-out reads as a single solid shape.
+func renderCoachBalloon(n int, h coachHint, theme Theme, width int) string {
+	chip := lipgloss.NewStyle().
+		Foreground(theme.Primary).
+		Background(theme.Bg).
+		Bold(true).
+		Padding(0, 1).
+		Render(numberedPrefix(n))
+	titleStyle := lipgloss.NewStyle().Foreground(theme.Bg).Background(theme.Primary).Bold(true)
+	cueStyle := lipgloss.NewStyle().Foreground(theme.Bg).Background(theme.Primary).Italic(true)
+	body := titleStyle.Render(h.title)
+	if h.cue != "" {
+		body += "\n" + cueStyle.Render(h.cue)
+	}
+	row := lipgloss.JoinHorizontal(lipgloss.Top, chip, " "+body)
+	return lipgloss.NewStyle().
+		Background(theme.Primary).
+		Padding(0, 1).
+		Width(width).
+		Render(row)
 }
 
 func numberedPrefix(n int) string {

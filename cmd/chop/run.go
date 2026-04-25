@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/moq77111113/chop/internal/dashboard"
 	"github.com/moq77111113/chop/internal/scenario"
 	"github.com/moq77111113/chop/internal/supervisor"
 	"github.com/moq77111113/chop/internal/supervisor/api"
@@ -20,6 +21,7 @@ import (
 const (
 	defaultBindAddr = "127.0.0.1:7080"
 	shutdownGrace   = 5 * time.Second
+	pathDashboard   = "/"
 )
 
 var runBindAddr string
@@ -51,6 +53,7 @@ func runScenario(_ *cobra.Command, args []string) error {
 	a := api.New(sup)
 	mux := http.NewServeMux()
 	a.Mount(mux)
+	mux.Handle(pathDashboard, dashboard.Handler())
 	srv := &http.Server{Addr: runBindAddr, Handler: mux, ReadHeaderTimeout: shutdownGrace}
 
 	go runComponent(cancel, "supervisor", func() error { return sup.Run(ctx, sc) })

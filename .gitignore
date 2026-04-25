@@ -9,6 +9,10 @@ coverage.txt
 /web/dist
 /web/.vite
 
+# Embedded SPA — keep dir + .gitkeep so go:embed compiles, ignore copied build
+/internal/dashboard/dist/*
+!/internal/dashboard/dist/.gitkeep
+
 # Dev artifacts
 /testdata/*.h264
 session.ndjson

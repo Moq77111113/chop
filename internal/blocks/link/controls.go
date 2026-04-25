@@ -4,6 +4,8 @@ package link
 
 import "sync/atomic"
 
+// Controls is the live, hot-swappable impairment configuration of a link
+// block. BandwidthKbps is reserved for M2 (token bucket).
 type Controls struct {
 	Loss          float64 `json:"loss"`
 	LatencyMs     uint32  `json:"latency_ms"`

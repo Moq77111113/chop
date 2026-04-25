@@ -23,6 +23,8 @@ const (
 
 var emptyAck = json.RawMessage(`{}`)
 
+// Factory builds a Block from its parsed Config. Block implementations
+// register their factory by name and pass it to RunBlock.
 type Factory func(Config) Block
 
 // RunBlock is the entry point for a block binary. It parses argv, opens stdio

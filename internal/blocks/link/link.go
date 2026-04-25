@@ -5,10 +5,26 @@ package link
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/moq77111113/chop/block"
 )
 
+// Config is the static configuration of a link block, parsed from the
+// scenario YAML `config:` section.
+type Config struct {
+	Upstream string `json:"upstream"`
+	ServeAt  string `json:"serve_at"`
+}
+
+var (
+	errMissingUpstream = errors.New("link: upstream is required")
+	errMissingServeAt  = errors.New("link: serve_at is required")
+)
+
+// LinkBlock is the link block implementation: an RTSP pull-proxy that
+// applies live impairments (loss, latency, jitter) to forwarded RTP packets.
 type LinkBlock struct {
 	cfg      block.Config
 	link     Config
@@ -18,6 +34,8 @@ type LinkBlock struct {
 	proxy    *proxy
 }
 
+// New is the link block factory. Configuration errors are deferred to Run
+// so the block can be constructed unconditionally by the runtime.
 func New(c block.Config) block.Block {
 	cfg, err := parseConfig(c.Static)
 	ctrs := &counters{}
@@ -54,4 +72,27 @@ func (b *LinkBlock) Run(ctx context.Context) error {
 		return b.parseErr
 	}
 	return b.proxy.run(ctx)
+}
+
+func parseConfig(raw json.RawMessage) (Config, error) {
+	var c Config
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return Config{}, fmt.Errorf("link: parse config: %w", err)
+	}
+	if c.Upstream == "" {
+		return Config{}, errMissingUpstream
+	}
+	if c.ServeAt == "" {
+		return Config{}, errMissingServeAt
+	}
+	return c, nil
+}
+
+func parseInitialControls(raw json.RawMessage) Controls {
+	var c Controls
+	if len(raw) == 0 {
+		return c
+	}
+	_ = json.Unmarshal(raw, &c)
+	return c
 }

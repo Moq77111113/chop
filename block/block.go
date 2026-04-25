@@ -17,12 +17,16 @@ const (
 	StatusStopped  Status = "stopped"
 )
 
+// Info is the static identity of a block, returned to the supervisor on demand.
+// The Config field carries the original YAML `config:` section verbatim.
 type Info struct {
 	ID     string          `json:"id"`
 	Type   string          `json:"type"`
 	Config json.RawMessage `json:"config"`
 }
 
+// Snapshot is the live observation of a block at a point in time.
+// Stats is a block-specific JSON payload (each block defines its own shape).
 type Snapshot struct {
 	Status Status          `json:"status"`
 	Stats  json.RawMessage `json:"stats"`
@@ -38,6 +42,10 @@ type Config struct {
 	Live   json.RawMessage
 }
 
+// Block is the contract every chop block implementation must satisfy.
+// Implementations are constructed by a Factory, then driven by RunBlock:
+// the supervisor calls Info/Snapshot/Apply/Action over JSON-RPC, and Run
+// executes the block's effects until the context is cancelled.
 type Block interface {
 	Info() Info
 	Snapshot() Snapshot

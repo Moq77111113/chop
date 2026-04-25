@@ -25,6 +25,8 @@ const (
 	errPrefixUnknownMethod = "unknown method: "
 )
 
+// Message is one ndjson frame on the wire. Type ("req", "resp", "event")
+// selects which fields are populated.
 type Message struct {
 	Type   string          `json:"type"`
 	ID     uint64          `json:"id,omitempty"`
@@ -39,8 +41,12 @@ type Message struct {
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
+// Handler answers a single JSON-RPC request. Returning an error propagates
+// it as the response error string.
 type Handler func(params json.RawMessage) (json.RawMessage, error)
 
+// Endpoint is a bidirectional JSON-RPC peer over an ndjson byte stream.
+// It serves registered handlers, makes outbound calls, and emits events.
 type Endpoint struct {
 	in       *bufio.Scanner
 	out      io.Writer
@@ -50,12 +56,16 @@ type Endpoint struct {
 	pending  sync.Map // id -> chan Message
 }
 
+// NewEndpoint wraps an io.Reader/io.Writer pair as a JSON-RPC endpoint.
+// The reader is buffered with a 4MiB max line size; lines beyond that fail.
 func NewEndpoint(in io.Reader, out io.Writer) *Endpoint {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, scanInitialBuf), scanMaxBuf)
 	return &Endpoint{in: sc, out: out, handlers: map[string]Handler{}}
 }
 
+// Handle registers a Handler for the given method name. Not safe for concurrent
+// use with Serve — register all handlers before calling Serve.
 func (e *Endpoint) Handle(method string, h Handler) {
 	e.handlers[method] = h
 }

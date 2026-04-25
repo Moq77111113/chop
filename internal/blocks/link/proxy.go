@@ -19,6 +19,9 @@ import (
 const (
 	eventLinkUp     = "link.up"
 	eventRTPDropped = "rtp.dropped"
+
+	upstreamRetryAttempts = 20
+	upstreamRetryDelay    = 200 * time.Millisecond
 )
 
 type proxy struct {
@@ -44,7 +47,7 @@ func newProxy(cfg Config, ctrls *ctrlBox, ctrs *counters) *proxy {
 }
 
 func (p *proxy) run(ctx context.Context) error {
-	desc, err := p.connectUpstream()
+	desc, err := p.connectUpstream(ctx)
 	if err != nil {
 		return fmt.Errorf("upstream: %w", err)
 	}
@@ -76,22 +79,45 @@ func (p *proxy) run(ctx context.Context) error {
 	return nil
 }
 
-func (p *proxy) connectUpstream() (*description.Session, error) {
+// connectUpstream retries the RTSP handshake until it succeeds, ctx is
+// cancelled, or upstreamRetryAttempts are exhausted. M1 has no DAG so the
+// link block can boot before the source has finished binding.
+func (p *proxy) connectUpstream(ctx context.Context) (*description.Session, error) {
+	var lastErr error
+	for range upstreamRetryAttempts {
+		desc, err := p.dialUpstream()
+		if err == nil {
+			return desc, nil
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(upstreamRetryDelay):
+		}
+	}
+	return nil, fmt.Errorf("%w (after %d attempts)", lastErr, upstreamRetryAttempts)
+}
+
+func (p *proxy) dialUpstream() (*description.Session, error) {
 	u, err := base.ParseURL(p.cfg.Upstream)
 	if err != nil {
 		return nil, err
 	}
-	p.upstream = &gortsplib.Client{Scheme: u.Scheme, Host: u.Host}
-	if err := p.upstream.Start(); err != nil {
+	client := &gortsplib.Client{Scheme: u.Scheme, Host: u.Host}
+	if err := client.Start(); err != nil {
 		return nil, err
 	}
-	desc, _, err := p.upstream.Describe(u)
+	desc, _, err := client.Describe(u)
 	if err != nil {
+		client.Close()
 		return nil, err
 	}
-	if err := p.upstream.SetupAll(desc.BaseURL, desc.Medias); err != nil {
+	if err := client.SetupAll(desc.BaseURL, desc.Medias); err != nil {
+		client.Close()
 		return nil, err
 	}
+	p.upstream = client
 	return desc, nil
 }
 

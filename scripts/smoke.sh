@@ -16,10 +16,7 @@ require_fixture() {
 }
 
 build_artifacts() {
-    echo "smoke: building front + binary"
-    (cd web && pnpm build >/dev/null)
-    mkdir -p internal/dashboard/dist
-    cp -r web/dist/* internal/dashboard/dist/
+    echo "smoke: building binary"
     go build -o "$binary" ./cmd/chop
 }
 

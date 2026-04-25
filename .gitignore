@@ -4,15 +4,6 @@
 *.out
 coverage.txt
 
-# Vite / Node
-/web/node_modules
-/web/dist
-/web/.vite
-
-# Embedded SPA — keep dir + .gitkeep so go:embed compiles, ignore copied build
-/internal/dashboard/dist/*
-!/internal/dashboard/dist/.gitkeep
-
 # Dev artifacts
 /testdata/*.mp4
 /testdata/*.h264

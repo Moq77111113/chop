@@ -4,7 +4,7 @@ set -euo pipefail
 readonly fixture="testdata/pattern.h264"
 readonly scenario="examples/smoke.yml"
 readonly binary="./chop"
-readonly bind="127.0.0.1:7080"
+readonly bind="127.0.0.1:6700"
 readonly api="http://${bind}/api/blocks"
 readonly bootDeadlineSeconds=10
 readonly expectedBlocks=("cam-1" "link-1")

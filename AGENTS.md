@@ -100,29 +100,25 @@ Per-package iteration is preferred during dev (fast feedback). `make smoke` is t
 
 ## Code Conventions
 
-### Files & functions
+Global principles in `~/.claude/CLAUDE.md` § Coding apply (one nameable concept per file, function size, comments policy, naming). What follows is Go-specific.
 
-- **One file = one responsibility.** Target < 100 LOC per file ; split when it grows past that for any reason other than a single coherent block.
-- **Functions read like sentences.** Extract named helpers (`lostToDice`, `latencyWithJitter`, `dropped`, `delayed`) instead of inlining logic.
-- **Guard clauses early.** No nested ifs.
-- **Helpers below their caller**, in the order they're encountered.
-- **Avoid "and" in function names.** `parseAndValidate` is two functions wearing one mask.
+### Go file organization
 
-### Naming
+- **The package is the primary unit.** A file is a named chapter of the package, not a module on its own. When a seam emerges, ask first whether it's a *package-level* seam (a new dir under `internal/`) before a *file-level* seam.
+- **Expected distribution.** Most files 60-150 LOC, queue acknowledged up to ~500-1000 for dense concepts (cf. mediamtx `internal/core/path.go` 1092, permify `internal/engines/check.go` 909). No hard cap.
+- **Missing-seam heuristic.** When a file passes ~300 LOC, take five minutes to verify it carries one nameable concept. If yes, keep it long. If not, the real seam appears at that moment — and it'll match a global split axis (surface/internals, pure/effects, distinct roles), not "length".
+- **Godoc on every exported symbol of the public surface.** `block/` is the only public API of chop : `Block`, `Info`, `Snapshot`, `Config`, `RunBlock`, `Emit`, `Method*` — each carries a doc comment that begins with the symbol's name and stays tight.
 
-- **No magic numbers, no magic strings.** Every literal that has a name should have a name. RPC verbs (`MethodSnapshot = "snapshot"`), exit codes (`exitBlockRunErr = 1`), buffer sizes (`scanInitialBuf = 64 * 1024`), repeated empty payloads (`emptyAck = json.RawMessage("{}")`).
+### Naming (Go-specific anchors)
+
+- **Magic literals worth a name** : RPC verbs (`MethodSnapshot = "snapshot"`), exit codes (`exitBlockRunErr = 1`), buffer sizes (`scanInitialBuf = 64 * 1024`), repeated empty payloads (`emptyAck = json.RawMessage("{}")`).
 - **Exported = part of the public contract.** Capitalized identifiers in `block/` are forever-stable. Add carefully.
-- **Type names describe what, helper names describe what they do.** `Controls`, `Snapshot`, `Decision` (nouns) ; `Decide`, `Apply`, `Emit` (verbs).
-
-### No comments
-
-Code is self-explanatory. If a comment is needed to understand WHAT, refactor the code. Comments justify WHY only when non-obvious : a hidden invariant, a workaround for an upstream bug, a perf-critical choice. Doc comments on exported APIs (`block.Block`, `block.RunBlock`) are part of the public surface and stay tight.
 
 ### Types over flags
 
 Discriminated configs use a `kind:` field that maps to a typed shape. No `if cfg.IsRTSP { ... } else if cfg.IsSynthetic { ... }` chains.
 
-### KISS / YAGNI
+### KISS / YAGNI (chop-specific reminders)
 
 - The MVP ships only what the next test needs.
 - No future-proofing for hypotheticals. The code already flags clear extension points (e.g. backend `proxy | netem` for the link impairment) — ship one, design the seam, don't build the second until someone asks.
@@ -153,7 +149,7 @@ The dashboard is dev tooling — clarity over polish. SolidJS + Vite + TS. No de
 
 - **Solid signals everywhere** for live data. Avoid React-style re-render thinking.
 - **WebSocket for live state**, fetch for one-shots. Debounce slider-driven `PATCH /api/blocks/:id/controls` (50ms is plenty).
-- **One file per component.** Same < 100 LOC target.
+- **One file per component.** Component owns its props, render, and any local state — global file conventions apply.
 - **No CSS framework imposed.** Inline styles or a tiny shared `styles.css` are both fine while the surface is small. Reassess if it grows.
 - **Built artifacts** go to `web/dist/` then are copied to `internal/dashboard/dist/` for `embed.FS`. Don't commit either.
 

@@ -62,8 +62,8 @@ blocks:
   - id: lnk
     type: link
     config:
-      upstream: rtsp://127.0.0.1:5101/cam1
-      serve_at: 127.0.0.1:8501
+      upstream: rtsp://127.0.0.1:6710/cam1
+      serve_at: 127.0.0.1:6720
     controls:
       loss: 0.1
 `)
@@ -78,8 +78,8 @@ blocks:
 	if err := json.Unmarshal(s.Blocks[0].Config, &cfg); err != nil {
 		t.Fatalf("decode config: %v", err)
 	}
-	if cfg.Upstream != "rtsp://127.0.0.1:5101/cam1" {
-		t.Fatalf("upstream = %q, want rtsp://127.0.0.1:5101/cam1", cfg.Upstream)
+	if cfg.Upstream != "rtsp://127.0.0.1:6710/cam1" {
+		t.Fatalf("upstream = %q, want rtsp://127.0.0.1:6710/cam1", cfg.Upstream)
 	}
 	var ctrl struct {
 		Loss float64 `json:"loss"`

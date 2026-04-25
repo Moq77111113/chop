@@ -1,8 +1,8 @@
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import solid from 'vite-plugin-solid'
-import tailwindcss from '@tailwindcss/vite'
 
-const supervisorOrigin = 'http://127.0.0.1:7080'
+const supervisorOrigin = 'http://127.0.0.1:6700'
 
 export default defineConfig({
   plugins: [solid(), tailwindcss()],

@@ -16,9 +16,10 @@ const (
 	exitBlockRunErr = 1
 	exitBadArgv     = 2
 
-	// argvBlockTypeOffset skips the program name and the "block" subcommand
-	// in `chop block <type> -id ... -config ... -controls ...`.
-	argvBlockTypeOffset = 2
+	// argvBlockFlagsOffset skips program name, "block" subcommand, and the
+	// type positional in `chop block <type> -id ... -config ... -controls ...`,
+	// landing fs.Parse at the first flag.
+	argvBlockFlagsOffset = 3
 )
 
 var emptyAck = json.RawMessage(`{}`)
@@ -58,7 +59,7 @@ func parseArgv(typeName string) Config {
 	id := fs.String("id", "", "block id (required)")
 	static := fs.String("config", string(emptyAck), "static config (JSON)")
 	live := fs.String("controls", string(emptyAck), "initial controls (JSON)")
-	_ = fs.Parse(os.Args[argvBlockTypeOffset:])
+	_ = fs.Parse(os.Args[argvBlockFlagsOffset:])
 	if *id == "" {
 		fmt.Fprintln(os.Stderr, "missing -id")
 		os.Exit(exitBadArgv)

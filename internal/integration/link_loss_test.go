@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -33,6 +34,9 @@ const (
 func TestLink_LossRateMatchesControl(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
+	}
+	if _, err := os.Stat(patternFixture); err != nil {
+		t.Skipf("fixture %s not found — run `make fixture` to generate", patternFixture)
 	}
 
 	src := source.New(block.Config{

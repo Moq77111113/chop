@@ -3,6 +3,7 @@ package source_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -24,6 +25,9 @@ const (
 )
 
 func TestSource_ClientCanDescribeVideo(t *testing.T) {
+	if _, err := os.Stat(testFixture); err != nil {
+		t.Skipf("fixture %s not found — run `make fixture` to generate", testFixture)
+	}
 	b := source.New(block.Config{
 		ID:   "src-test",
 		Type: "source",

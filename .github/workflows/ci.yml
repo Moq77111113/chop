@@ -71,7 +71,7 @@ jobs:
         with:
           go-version: "1.26.2"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 

@@ -7,6 +7,8 @@ import (
 	"github.com/bluenviron/gortsplib/v5/pkg/base"
 	"github.com/bluenviron/gortsplib/v5/pkg/description"
 	"github.com/bluenviron/gortsplib/v5/pkg/format"
+
+	"github.com/moq77111113/chop/internal/rtsp"
 )
 
 const (
@@ -21,7 +23,7 @@ type server struct {
 }
 
 func startServer(listen string) (*server, error) {
-	rtpAddr, rtcpAddr, err := deriveUDPPorts(listen)
+	rtpAddr, rtcpAddr, err := rtsp.DeriveUDPPorts(listen)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bluenviron/gortsplib/v5 v5.5.1
+	github.com/pion/rtp v1.10.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -14,7 +15,6 @@ require (
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.16 // indirect
-	github.com/pion/rtp v1.10.1 // indirect
 	github.com/pion/sdp/v3 v3.0.18 // indirect
 	github.com/pion/srtp/v3 v3.0.10 // indirect
 	github.com/pion/transport/v4 v4.0.1 // indirect

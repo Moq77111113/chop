@@ -1,11 +1,15 @@
-package source
+// Package rtsp provides low-level RTSP/RTP helpers shared between block types.
+package rtsp
 
 import (
 	"net"
 	"strconv"
 )
 
-func deriveUDPPorts(rtspAddr string) (rtp, rtcp string, err error) {
+// DeriveUDPPorts returns the UDP RTP/RTCP address pair derived from an RTSP
+// listen address. gortsplib requires the RTP port to be even and RTCP to be
+// RTP+1 (RFC 3550 §11). The first even port at or above rtspPort+1 is chosen.
+func DeriveUDPPorts(rtspAddr string) (rtp, rtcp string, err error) {
 	host, portStr, err := net.SplitHostPort(rtspAddr)
 	if err != nil {
 		return "", "", err

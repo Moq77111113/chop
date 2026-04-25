@@ -14,21 +14,31 @@ import (
 
 const rtpClockRate = 90000
 
-func replay(ctx context.Context, stream *gortsplib.ServerStream, file string, fps int, served *atomic.Int64) error {
-	aus, err := loadAccessUnits(file)
+type h264Stream struct {
+	sps []byte
+	pps []byte
+	aus [][][]byte
+}
+
+func loadH264(file string) (h264Stream, error) {
+	data, err := os.ReadFile(file)
 	if err != nil {
-		return err
+		return h264Stream{}, err
 	}
+	nalus := splitAnnexB(data)
+	sps, pps := firstParameterSets(nalus)
+	return h264Stream{sps: sps, pps: pps, aus: groupAccessUnits(nalus)}, nil
+}
+
+func replay(ctx context.Context, stream *gortsplib.ServerStream, aus [][][]byte, fps int, served *atomic.Int64) error {
 	if len(aus) == 0 {
 		return nil
 	}
-
 	media := stream.Desc.Medias[0]
 	enc, err := media.Formats[0].(*format.H264).CreateEncoder()
 	if err != nil {
 		return err
 	}
-
 	return runLoop(ctx, stream, media, enc, aus, fps, served)
 }
 
@@ -65,12 +75,4 @@ func runLoop(
 			ts += tsStep
 		}
 	}
-}
-
-func loadAccessUnits(file string) ([][][]byte, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	return groupAccessUnits(splitAnnexB(data)), nil
 }

@@ -11,6 +11,8 @@ const (
 	naluTypeMask   byte = 0x1F
 	naluTypeNonIDR byte = 1
 	naluTypeIDR    byte = 5
+	naluTypeSPS    byte = 7
+	naluTypePPS    byte = 8
 )
 
 func splitAnnexB(data []byte) [][]byte {
@@ -77,4 +79,29 @@ func groupAccessUnits(nalus [][]byte) [][][]byte {
 func isVCL(header byte) bool {
 	t := header & naluTypeMask
 	return t == naluTypeNonIDR || t == naluTypeIDR
+}
+
+// firstParameterSets returns the first SPS and PPS NALUs found in nalus, or
+// nil for any not present. Required to populate the H264 SDP description so
+// downstream decoders can configure themselves before the RTP stream arrives.
+func firstParameterSets(nalus [][]byte) (sps, pps []byte) {
+	for _, n := range nalus {
+		if len(n) == 0 {
+			continue
+		}
+		switch n[0] & naluTypeMask {
+		case naluTypeSPS:
+			if sps == nil {
+				sps = n
+			}
+		case naluTypePPS:
+			if pps == nil {
+				pps = n
+			}
+		}
+		if sps != nil && pps != nil {
+			return
+		}
+	}
+	return
 }

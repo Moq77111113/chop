@@ -22,7 +22,7 @@ type server struct {
 	ready  sync.RWMutex
 }
 
-func startServer(listen string) (*server, error) {
+func startServer(listen string, sps, pps []byte) (*server, error) {
 	rtpAddr, rtcpAddr, err := rtsp.DeriveUDPPorts(listen)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func startServer(listen string) (*server, error) {
 		return nil, err
 	}
 
-	s.stream = &gortsplib.ServerStream{Server: s.rtsp, Desc: newSessionDesc()}
+	s.stream = &gortsplib.ServerStream{Server: s.rtsp, Desc: newSessionDesc(sps, pps)}
 	if err := s.stream.Initialize(); err != nil {
 		s.rtsp.Close()
 		return nil, err
@@ -51,12 +51,14 @@ func startServer(listen string) (*server, error) {
 	return s, nil
 }
 
-func newSessionDesc() *description.Session {
+func newSessionDesc(sps, pps []byte) *description.Session {
 	return &description.Session{Medias: []*description.Media{{
 		Type: description.MediaTypeVideo,
 		Formats: []format.Format{&format.H264{
 			PayloadTyp:        rtpPayloadType,
 			PacketizationMode: h264PacketizationMode,
+			SPS:               sps,
+			PPS:               pps,
 		}},
 	}}}
 }

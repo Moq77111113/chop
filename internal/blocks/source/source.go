@@ -76,7 +76,11 @@ func (b *SourceBlock) Run(ctx context.Context) error {
 	if b.parseErr != nil {
 		return b.parseErr
 	}
-	srv, err := startServer(b.source.Listen)
+	stream, err := loadH264(b.source.File)
+	if err != nil {
+		return err
+	}
+	srv, err := startServer(b.source.Listen, stream.sps, stream.pps)
 	if err != nil {
 		return err
 	}
@@ -85,7 +89,7 @@ func (b *SourceBlock) Run(ctx context.Context) error {
 	b.upSinceMs.Store(time.Now().UnixMilli())
 	block.Emit(ctx, eventSourceUp, map[string]string{"listen": b.source.Listen})
 
-	return replay(ctx, srv.stream, b.source.File, b.source.FPS, &b.served)
+	return replay(ctx, srv.stream, stream.aus, b.source.FPS, &b.served)
 }
 
 func parseConfig(raw json.RawMessage) (Config, error) {

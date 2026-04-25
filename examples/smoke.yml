@@ -7,7 +7,7 @@ blocks:
     config:
       file: testdata/pattern.h264
       listen: 127.0.0.1:5101
-      fps: 25
+      fps: 30
 
   - id: link-1
     type: link

@@ -50,7 +50,7 @@ blocks:
     - id: cam-1
       type: source
       config:
-          file: testdata/pattern.h264
+          file: testdata/pattern.mp4
           listen: 127.0.0.1:6710
           fps: 30
 

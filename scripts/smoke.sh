@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly fixture="testdata/pattern.h264"
+readonly fixture="testdata/pattern.mp4"
 readonly scenario="examples/smoke.yml"
 readonly binary="./chop"
 readonly bind="127.0.0.1:6700"

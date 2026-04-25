@@ -14,6 +14,7 @@ coverage.txt
 !/internal/dashboard/dist/.gitkeep
 
 # Dev artifacts
+/testdata/*.mp4
 /testdata/*.h264
 session.ndjson
 .DS_Store

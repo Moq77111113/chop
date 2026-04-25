@@ -5,8 +5,8 @@ const debounceMs = 50
 const sliderMax = 50
 const percentDivisor = 100
 
-export default function LinkSlider(props: { id: string }) {
-  const [loss, setLoss] = createSignal(0)
+export default function LinkSlider(props: { id: string; initialLoss: number }) {
+  const [loss, setLoss] = createSignal(props.initialLoss * percentDivisor)
   let pending: ReturnType<typeof setTimeout> | undefined
 
   function onChange(value: number) {

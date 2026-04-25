@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	testFixture    = "../../../testdata/pattern.h264"
+	testFixture    = "../../../testdata/pattern.mp4"
 	testListenAddr = "127.0.0.1:5101"
 	testStreamPath = "/stream"
 	serverWarmup   = 300 * time.Millisecond

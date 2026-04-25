@@ -76,7 +76,7 @@ func (b *SourceBlock) Run(ctx context.Context) error {
 	if b.parseErr != nil {
 		return b.parseErr
 	}
-	stream, err := loadH264(b.source.File)
+	stream, err := loadMP4(b.source.File)
 	if err != nil {
 		return err
 	}

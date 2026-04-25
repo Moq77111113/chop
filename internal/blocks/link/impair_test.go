@@ -13,7 +13,7 @@ const (
 	lossTolerance    = 0.005
 	latencyMs        = 100
 	jitterMs         = 20
-	swapReaders      = 1_000
+	swapReaders      = 100
 	swapWrites       = 100
 )
 

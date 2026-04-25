@@ -17,7 +17,7 @@ const (
 	linkServeAt    = "127.0.0.1:18501"
 	srcStreamPath  = "/stream"
 	upstreamURL    = "rtsp://" + srcListen + srcStreamPath
-	patternFixture = "../../testdata/pattern.h264"
+	patternFixture = "../../testdata/pattern.mp4"
 	srcFPS         = 25
 
 	srcWarmup      = 300 * time.Millisecond

@@ -2,6 +2,21 @@ export type BlockListEntry = { id: string; type: string }
 export type Snapshot = { status: string; stats: unknown; ts: number }
 export type SnapshotMsg = { type: 'snapshot'; id: string; snapshot: Snapshot }
 
+export type LinkControls = {
+  loss: number
+  latency_ms: number
+  jitter_ms: number
+  bandwidth_kbps: number
+}
+
+export type LinkStats = {
+  packets_in: number
+  packets_out: number
+  packets_dropped: number
+  up_since_ms: number
+  controls: LinkControls
+}
+
 export const apiPaths = {
   blocks: '/api/blocks',
   controls: (id: string) => `/api/blocks/${id}/controls`,

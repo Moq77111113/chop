@@ -54,7 +54,7 @@ func (b *LinkBlock) Info() block.Info {
 	return block.Info{ID: b.cfg.ID, Type: b.cfg.Type, Config: b.cfg.Static}
 }
 
-func (b *LinkBlock) Snapshot() block.Snapshot { return snapshotOf(b.counters) }
+func (b *LinkBlock) Snapshot() block.Snapshot { return snapshotOf(b.counters, b.ctrls) }
 
 func (b *LinkBlock) Apply(p json.RawMessage) error {
 	var c Controls

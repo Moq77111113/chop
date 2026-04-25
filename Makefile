@@ -2,7 +2,7 @@
 
 GO_BIN := chop
 EMBED_DIST := internal/dashboard/dist
-FIXTURE := testdata/pattern.h264
+FIXTURE := testdata/pattern.mp4
 
 build: embed
 	go build -o $(GO_BIN) ./cmd/chop
@@ -22,7 +22,7 @@ lint:
 $(FIXTURE):
 	ffmpeg -y -f lavfi -i testsrc2=size=854x480:rate=30 -t 5 \
 		-c:v libx264 -profile:v baseline -tune zerolatency \
-		-g 30 -pix_fmt yuv420p -an -f h264 $@
+		-g 30 -pix_fmt yuv420p -movflags +faststart -an $@
 
 fixture: $(FIXTURE)
 

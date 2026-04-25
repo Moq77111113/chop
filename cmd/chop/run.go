@@ -10,11 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/moq77111113/chop/internal/scenario"
 	"github.com/moq77111113/chop/internal/supervisor"
 	"github.com/moq77111113/chop/internal/supervisor/api"
+	"github.com/moq77111113/chop/internal/tui"
 )
 
 const (
@@ -57,8 +59,39 @@ func runScenario(_ *cobra.Command, args []string) error {
 	go runComponent(cancel, "api", func() error { return a.Run(ctx) })
 	go runComponent(cancel, "http", func() error { return serveHTTP(srv, runBindAddr) })
 
-	<-ctx.Done()
-	return gracefulShutdown(srv)
+	runErr := runForeground(ctx, sup)
+	cancel()
+	if shutdownErr := gracefulShutdown(srv); shutdownErr != nil && runErr == nil {
+		return shutdownErr
+	}
+	return runErr
+}
+
+// runForeground opens the TUI when a controlling terminal is available.
+// Otherwise (CI, `chop run … &`, smoke scripts) it stays headless and just
+// blocks on ctx — supervisor + API keep running, the binary behaves as a
+// daemon.
+func runForeground(ctx context.Context, sup *supervisor.Supervisor) error {
+	if !hasControllingTerminal() {
+		<-ctx.Done()
+		return nil
+	}
+	prog := tea.NewProgram(tui.New(sup), tea.WithAltScreen(), tea.WithContext(ctx))
+	_, err := prog.Run()
+	return err
+}
+
+// hasControllingTerminal mirrors what bubbletea actually needs at runtime
+// (an openable /dev/tty for input). Stdin being a character device is a
+// weaker guarantee — under nohup, &, or non-interactive shells, stdin can
+// still look terminal-like while /dev/tty is unreachable.
+func hasControllingTerminal() bool {
+	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
 }
 
 func runComponent(cancel context.CancelFunc, name string, fn func() error) {

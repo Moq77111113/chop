@@ -11,6 +11,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 
 	"github.com/moq77111113/chop/internal/scenario"
@@ -24,7 +26,10 @@ const (
 	shutdownGrace   = 5 * time.Second
 )
 
-var runBindAddr string
+var (
+	runBindAddr  string
+	runOverrides []string
+)
 
 var runCmd = &cobra.Command{
 	Use:   "run <scenario.yml>",
@@ -35,11 +40,20 @@ var runCmd = &cobra.Command{
 
 func init() {
 	runCmd.Flags().StringVar(&runBindAddr, "bind", defaultBindAddr, "control API bind address")
+	runCmd.Flags().StringArrayVar(&runOverrides, "override", nil,
+		"per-block control overrides, e.g. link-1:loss=12%,latency=200ms (repeatable)")
 }
 
 func runScenario(_ *cobra.Command, args []string) error {
 	sc, err := scenario.Load(args[0])
 	if err != nil {
+		return err
+	}
+	overrides, err := parseOverrides(runOverrides)
+	if err != nil {
+		return err
+	}
+	if err := applyOverrides(sc, overrides); err != nil {
 		return err
 	}
 	sup, err := supervisor.New()
@@ -59,7 +73,7 @@ func runScenario(_ *cobra.Command, args []string) error {
 	go runComponent(cancel, "api", func() error { return a.Run(ctx) })
 	go runComponent(cancel, "http", func() error { return serveHTTP(srv, runBindAddr) })
 
-	runErr := runForeground(ctx, sup)
+	runErr := runForeground(ctx, sup, sc)
 	cancel()
 	if shutdownErr := gracefulShutdown(srv); shutdownErr != nil && runErr == nil {
 		return shutdownErr
@@ -67,18 +81,35 @@ func runScenario(_ *cobra.Command, args []string) error {
 	return runErr
 }
 
-// runForeground opens the TUI when a controlling terminal is available.
-// Otherwise (CI, `chop run … &`, smoke scripts) it stays headless and just
-// blocks on ctx — supervisor + API keep running, the binary behaves as a
-// daemon.
-func runForeground(ctx context.Context, sup *supervisor.Supervisor) error {
+// runForeground opens the TUI in interactive terminals; otherwise it stays
+// headless and blocks until ctx is cancelled.
+func runForeground(ctx context.Context, sup *supervisor.Supervisor, sc *scenario.Scenario) error {
 	if !hasControllingTerminal() {
 		<-ctx.Done()
 		return nil
 	}
-	prog := tea.NewProgram(tui.New(sup), tea.WithAltScreen(), tea.WithContext(ctx))
+	// Skip termenv's capability probe — slow on tmux/screen/some SSH paths.
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	prog := tea.NewProgram(tui.New(sup, sc), tea.WithAltScreen(), tea.WithContext(ctx))
+	go pumpEvents(ctx, sup, prog)
 	_, err := prog.Run()
 	return err
+}
+
+// pumpEvents forwards supervisor events into the TUI program as tea
+// messages. It exits when ctx is cancelled.
+func pumpEvents(ctx context.Context, sup *supervisor.Supervisor, prog *tea.Program) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-sup.Events():
+			if !ok {
+				return
+			}
+			prog.Send(tui.EventMsg{Event: ev})
+		}
+	}
 }
 
 // hasControllingTerminal mirrors what bubbletea actually needs at runtime

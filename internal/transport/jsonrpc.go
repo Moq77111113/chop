@@ -45,6 +45,18 @@ type Message struct {
 // it as the response error string.
 type Handler func(params json.RawMessage) (json.RawMessage, error)
 
+// Event is the wire-decoded form of an event-type Message, surfaced to a
+// registered handler so consumers don't peer at Message internals.
+type Event struct {
+	Kind    string
+	TsMs    int64
+	Payload json.RawMessage
+}
+
+// EventHandler receives events as they arrive on the endpoint. The handler
+// runs on the dispatch goroutine — keep it fast or hand off to a channel.
+type EventHandler func(Event)
+
 // Endpoint is a bidirectional JSON-RPC peer over an ndjson byte stream.
 // It serves registered handlers, makes outbound calls, and emits events.
 type Endpoint struct {
@@ -52,9 +64,14 @@ type Endpoint struct {
 	out      io.Writer
 	outMu    sync.Mutex
 	handlers map[string]Handler
+	onEvent  EventHandler
 	nextID   atomic.Uint64
 	pending  sync.Map // id -> chan Message
 }
+
+// OnEvent registers a callback invoked for each event-type message read
+// from the peer. Only the last registered handler is kept.
+func (e *Endpoint) OnEvent(h EventHandler) { e.onEvent = h }
 
 // NewEndpoint wraps an io.Reader/io.Writer pair as a JSON-RPC endpoint.
 // The reader is buffered with a 4MiB max line size; lines beyond that fail.
@@ -95,6 +112,10 @@ func (e *Endpoint) dispatch(m Message) {
 		go e.handleRequest(m)
 	case msgTypeResp:
 		e.deliverResponse(m)
+	case msgTypeEvent:
+		if e.onEvent != nil {
+			e.onEvent(Event{Kind: m.Kind, TsMs: m.TsMs, Payload: m.Payload})
+		}
 	}
 }
 

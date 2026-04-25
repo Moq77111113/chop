@@ -9,6 +9,8 @@ type Styles struct {
 	Header   lipgloss.Style
 	Type     lipgloss.Style
 	Selected lipgloss.Style
+	Summary  lipgloss.Style
+	Spark    lipgloss.Style
 	Empty    lipgloss.Style
 	StateUp  lipgloss.Style
 	StateDeg lipgloss.Style

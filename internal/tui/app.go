@@ -1,87 +1,125 @@
 package tui
 
 import (
-	"context"
-	"strings"
+	"encoding/json"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/moq77111113/chop/block"
+	"github.com/moq77111113/chop/internal/scenario"
 	"github.com/moq77111113/chop/internal/supervisor"
+	"github.com/moq77111113/chop/internal/tui/focused"
+	"github.com/moq77111113/chop/internal/tui/help"
 	"github.com/moq77111113/chop/internal/tui/linklist"
 )
 
 const (
 	titleSeparator = " · "
 	titleSuffix    = "/tʃɒp/"
-	tickInterval   = time.Second / 15
-	snapshotBudget = 200 * time.Millisecond
+	bootMessage    = "starting chop · spawning blocks…"
+	connectingHint = "spawning blocks · waiting for first snapshot…"
 )
 
-type tickMsg struct{}
+type uiState struct {
+	focusOn      focusZone
+	helpOpen     bool
+	confirmReset bool
+	coachOpen    bool
+	toastMsg     string
+	toastUntil   time.Time
+	firstReady   bool
+}
 
-type rowsMsg struct{ rows []linklist.Row }
+type dataState struct {
+	links   map[string]linkSnapshot
+	sources map[string]sourceSnapshot
+	history map[string][]float64
+	events  []uiEvent
+	linksAt time.Time
+}
 
-// App is the root bubbletea model. It owns the layout shell, the focus
-// machine, and the polling loop that feeds child components.
+type uiStyles struct {
+	list   linklist.Styles
+	focus  focused.Styles
+	help   help.Styles
+	events eventStyles
+}
+
+// App is the root bubbletea model. Sibling files: keys.go (input), poll.go
+// (data flow), layout.go (rendering), styles.go (theme bindings).
 type App struct {
-	sup      *supervisor.Supervisor
-	theme    Theme
-	keymap   Keymap
-	width    int
-	height   int
-	linkList *linklist.Model
-	listSt   linklist.Styles
+	sup    *supervisor.Supervisor
+	theme  Theme
+	keymap Keymap
+
+	width, height int
+	list          *linklist.Model
+	focused       *focused.Model
+
+	configs map[string]json.RawMessage
+
+	ui     uiState
+	data   dataState
+	styles uiStyles
 }
 
-// New constructs the App bound to a running supervisor. The supervisor is
-// expected to be started in a sibling goroutine; the TUI consumes its
-// registry on each tick.
-func New(sup *supervisor.Supervisor) *App {
+func New(sup *supervisor.Supervisor, sc *scenario.Scenario) *App {
 	t := DefaultTheme()
-	a := &App{
-		sup:      sup,
-		theme:    t,
-		keymap:   DefaultKeymap(),
-		linkList: &linklist.Model{},
-		listSt:   newListStyles(t),
+	configs := map[string]json.RawMessage{}
+	if sc != nil {
+		for _, b := range sc.Blocks {
+			configs[b.ID] = b.Config
+		}
 	}
-	return a
+	return &App{
+		sup:     sup,
+		theme:   t,
+		keymap:  DefaultKeymap(),
+		list:    &linklist.Model{},
+		focused: focused.New(),
+		configs: configs,
+		styles: uiStyles{
+			list:   newListStyles(t),
+			focus:  newFocusedStyles(t),
+			help:   newHelpStyles(t),
+			events: newEventStyles(t),
+		},
+		data: dataState{
+			links:   map[string]linkSnapshot{},
+			sources: map[string]sourceSnapshot{},
+			history: map[string][]float64{},
+		},
+		ui: uiState{coachOpen: shouldShowCoach()},
+	}
 }
 
-// Init schedules the first refresh tick.
-func (a *App) Init() tea.Cmd { return a.tickCmd() }
+func (a *App) Init() tea.Cmd { return tea.Batch(a.fetchCmd(), a.tickCmd()) }
 
-// Update handles window resize, polling, and global keys.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, a.keymap.Quit):
-			return a, tea.Quit
-		case key.Matches(msg, a.keymap.PickUp):
-			a.linkList.MoveUp()
-		case key.Matches(msg, a.keymap.PickDown):
-			a.linkList.MoveDown()
-		}
+		return a, a.handleKey(msg)
 	case tickMsg:
 		return a, tea.Batch(a.tickCmd(), a.fetchCmd())
 	case rowsMsg:
-		a.linkList.Set(msg.rows)
+		a.applyRowsMsg(msg)
+	case EventMsg:
+		a.appendEvent(msg.Event)
+	case toastClearMsg:
+		if !a.ui.toastUntil.IsZero() && !time.Now().Before(a.ui.toastUntil) {
+			a.ui.toastMsg = ""
+			a.ui.toastUntil = time.Time{}
+		}
 	}
 	return a, nil
 }
 
-// View renders the layout shell: titlebar, body (link list pane today,
-// focused-link pane tomorrow), statusbar.
 func (a *App) View() string {
 	if a.width == 0 {
-		return ""
+		return a.theme.Subtle.Render(bootMessage)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left,
 		a.titlebar(),
@@ -90,84 +128,25 @@ func (a *App) View() string {
 	)
 }
 
-func (a *App) tickCmd() tea.Cmd {
-	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
-}
-
-// fetchCmd returns a Cmd that snapshots every block in the registry and
-// emits a rowsMsg. It runs on bubbletea's command goroutine, never blocking
-// the render loop.
-func (a *App) fetchCmd() tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), snapshotBudget)
-		defer cancel()
-		handles := a.sup.Registry.List()
-		rows := make([]linklist.Row, 0, len(handles))
-		for _, h := range handles {
-			snap, err := h.Snapshot(ctx)
-			state := linklist.StateStarting
-			if err == nil {
-				state = mapState(snap.Status)
-			}
-			rows = append(rows, linklist.Row{ID: h.ID, Type: h.Type, State: state})
-		}
-		return rowsMsg{rows: rows}
+// consumableURL returns the rtsp endpoint a downstream consumer (ffplay,
+// mediamtx, etc.) should hit for a given block. Empty string when the
+// block isn't known or doesn't expose one.
+func (a *App) consumableURL(id string) string {
+	raw, ok := a.configs[id]
+	if !ok {
+		return ""
 	}
-}
-
-func mapState(s block.Status) linklist.State {
-	switch s {
-	case block.StatusRunning:
-		return linklist.StateUp
-	case block.StatusDegraded:
-		return linklist.StateDegraded
-	case block.StatusStopped:
-		return linklist.StateStopped
+	var lc struct {
+		ServeAt string `json:"serve_at"`
 	}
-	return linklist.StateStarting
-}
-
-func (a *App) titlebar() string {
-	left := a.theme.Title.Render("chop") + a.theme.Subtle.Render(titleSeparator+titleSuffix)
-	return lipgloss.NewStyle().
-		Width(a.width).
-		Foreground(a.theme.Fg).
-		Background(a.theme.Bg1).
-		Padding(0, 1).
-		Render(left)
-}
-
-func (a *App) body() string {
-	bodyHeight := max(a.height-2, 1)
-	return lipgloss.NewStyle().
-		Width(a.width).
-		Height(bodyHeight).
-		Padding(1, 2).
-		Render(a.linkList.Render(a.listSt, a.width-4, bodyHeight-2))
-}
-
-func (a *App) statusbar() string {
-	hints := []string{
-		a.keymap.PickUp.Help().Key + " pick link",
-		a.keymap.NextKnob.Help().Key + " pick knob",
-		a.keymap.Increase.Help().Key + " adjust",
-		a.keymap.Quit.Help().Key + " quit",
+	if json.Unmarshal(raw, &lc) == nil && lc.ServeAt != "" {
+		return "rtsp://" + lc.ServeAt
 	}
-	return a.theme.Statusbar.
-		Width(a.width).
-		Background(a.theme.Bg1).
-		Padding(0, 1).
-		Render(strings.Join(hints, titleSeparator))
-}
-
-func newListStyles(t Theme) linklist.Styles {
-	return linklist.Styles{
-		Header:   lipgloss.NewStyle().Foreground(t.Muted).Bold(true).MarginBottom(1),
-		Type:     lipgloss.NewStyle().Foreground(t.Dim),
-		Selected: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
-		Empty:    lipgloss.NewStyle().Foreground(t.Dim).Italic(true),
-		StateUp:  lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
-		StateDeg: lipgloss.NewStyle().Foreground(t.Warn).Bold(true),
-		StateBad: lipgloss.NewStyle().Foreground(t.Danger).Bold(true),
+	var sc struct {
+		Listen string `json:"listen"`
 	}
+	if json.Unmarshal(raw, &sc) == nil && sc.Listen != "" {
+		return "rtsp://" + sc.Listen
+	}
+	return ""
 }

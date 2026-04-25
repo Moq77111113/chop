@@ -16,6 +16,7 @@ import (
 type Supervisor struct {
 	Registry *Registry
 	selfExe  string
+	events   chan Event
 }
 
 // New constructs a Supervisor bound to the current executable. The same
@@ -25,7 +26,11 @@ func New() (*Supervisor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Supervisor{Registry: NewRegistry(), selfExe: exe}, nil
+	return &Supervisor{
+		Registry: NewRegistry(),
+		selfExe:  exe,
+		events:   make(chan Event, eventsBufferSize),
+	}, nil
 }
 
 // Run spawns each block declared in the scenario in declaration order
@@ -50,6 +55,7 @@ func (s *Supervisor) spawn(ctx context.Context, b scenario.Block) error {
 	if err != nil {
 		return fmt.Errorf("spawn %s: %w", b.ID, err)
 	}
+	s.forwardEvents(b.ID, ch.rpc)
 	s.Registry.Add(&Handle{ID: b.ID, Type: b.Type, child: ch})
 	go func() { _ = ch.rpc.Serve(ctx) }()
 	return nil

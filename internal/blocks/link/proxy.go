@@ -35,6 +35,8 @@ type proxy struct {
 
 	rngMu sync.Mutex
 	rng   *rand.Rand
+
+	bw *bucket
 }
 
 func newProxy(cfg Config, ctrls *ctrlBox, ctrs *counters) *proxy {
@@ -43,6 +45,7 @@ func newProxy(cfg Config, ctrls *ctrlBox, ctrs *counters) *proxy {
 		ctrls:    ctrls,
 		counters: ctrs,
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		bw:       &bucket{},
 	}
 }
 
@@ -133,11 +136,22 @@ func (p *proxy) onPacket(ctx context.Context, pkt *rtp.Packet) {
 		})
 		return
 	}
-	if d.Delay > 0 {
-		time.AfterFunc(d.Delay, func() { p.forward(pkt) })
+	delay := d.Delay + p.bandwidthDelay(pkt)
+	if delay > 0 {
+		time.AfterFunc(delay, func() { p.forward(pkt) })
 		return
 	}
 	p.forward(pkt)
+}
+
+func (p *proxy) bandwidthDelay(pkt *rtp.Packet) time.Duration {
+	c := p.ctrls.Load()
+	if c.BandwidthKbps == 0 {
+		return 0
+	}
+	const bitsPerByte = 8
+	const kbpsToBps = 1000
+	return p.bw.take(pkt.MarshalSize()*bitsPerByte, float64(c.BandwidthKbps)*kbpsToBps, bandwidthBurstSeconds)
 }
 
 func (p *proxy) decide() Decision {

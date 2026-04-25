@@ -21,12 +21,17 @@ const (
 	StateStopped  State = "STOPPED"
 )
 
-// Row is one line in the link list. Knob summary and sparkline arrive in
-// later steps; for now a row is identity + state.
+// Row is one line in the link list. KnobsSummary, when non-empty, prints
+// on a second indented line below the identity row and turns the row into
+// a two-line cell. Source rows leave it empty. Sparkline + Rate are shown
+// right-aligned next to the state pill on line 1.
 type Row struct {
-	ID    string
-	Type  string
-	State State
+	ID           string
+	Type         string
+	State        State
+	KnobsSummary string
+	Sparkline    string
+	Rate         string
 }
 
 // Model holds the rendered rows and the cursor.
@@ -74,8 +79,7 @@ func (m *Model) MoveDown() {
 func (m *Model) Render(s Styles, width, height int) string {
 	header := s.Header.Render("LINKS")
 	if len(m.rows) == 0 {
-		body := s.Empty.Render("no blocks · waiting on supervisor")
-		return clamp(lipgloss.JoinVertical(lipgloss.Left, header, body), width, height)
+		return clamp(lipgloss.JoinVertical(lipgloss.Left, header, s.Empty.Render("no blocks · waiting on supervisor")), width, height)
 	}
 
 	lines := make([]string, 0, len(m.rows)+1)
@@ -94,13 +98,26 @@ func (m *Model) renderRow(s Styles, r Row, focused bool, width int) string {
 	id := r.ID + " "
 	typ := s.Type.Render("(" + r.Type + ")")
 	state := s.statePill(r.State)
-	left := cursor + " " + id + typ
-	gap := strings.Repeat(" ", max(width-lipgloss.Width(left)-lipgloss.Width(state), 1))
-	row := left + gap + state
-	if focused {
-		return s.Selected.Render(row)
+	spark := ""
+	if r.Sparkline != "" {
+		spark = " " + s.Spark.Render(r.Sparkline)
 	}
-	return row
+	rate := ""
+	if r.Rate != "" {
+		rate = " " + s.Summary.Render(r.Rate)
+	}
+	left := cursor + " " + id + typ
+	right := state + spark + rate
+	gap := strings.Repeat(" ", max(width-lipgloss.Width(left)-lipgloss.Width(right), 1))
+	identity := left + gap + right
+	if focused {
+		identity = s.Selected.Render(identity)
+	}
+	if r.KnobsSummary == "" {
+		return identity
+	}
+	summary := s.Summary.Render("  " + r.KnobsSummary)
+	return identity + "\n" + summary
 }
 
 func clamp(view string, _, height int) string {

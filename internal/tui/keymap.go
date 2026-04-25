@@ -4,16 +4,16 @@ import "github.com/charmbracelet/bubbles/key"
 
 // Keymap declares every binding the chop TUI handles. The statusbar advertises
 // a contextual subset; the full set is the source of truth for the help
-// overlay (M2.5).
+// overlay opened with ?.
 type Keymap struct {
 	Quit       key.Binding
 	Help       key.Binding
-	PickUp     key.Binding
-	PickDown   key.Binding
-	NextKnob   key.Binding
-	PrevKnob   key.Binding
+	Up         key.Binding
+	Down       key.Binding
 	Decrease   key.Binding
 	Increase   key.Binding
+	Drill      key.Binding
+	Back       key.Binding
 	Zero       key.Binding
 	ResetLink  key.Binding
 	ResetAll   key.Binding
@@ -21,17 +21,17 @@ type Keymap struct {
 	ToggleFeed key.Binding
 }
 
-// DefaultKeymap returns the canonical bindings spec'd in DESIGN.md §5.
+// DefaultKeymap returns the canonical bindings.
 func DefaultKeymap() Keymap {
 	return Keymap{
 		Quit:       key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		PickUp:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑", "pick link")),
-		PickDown:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓", "pick link")),
-		NextKnob:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pick knob")),
-		PrevKnob:   key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev knob")),
+		Up:         key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑", "up")),
+		Down:       key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓", "down")),
 		Decrease:   key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←", "adjust")),
 		Increase:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→", "adjust")),
+		Drill:      key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("↵", "drill in")),
+		Back:       key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Zero:       key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "zero knob")),
 		ResetLink:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reset link")),
 		ResetAll:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "reset all")),

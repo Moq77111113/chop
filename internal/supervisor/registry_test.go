@@ -35,3 +35,22 @@ func TestRegistry_ListReturnsAllRegisteredHandles(t *testing.T) {
 		t.Fatalf("List len = %d, want 2", len(got))
 	}
 }
+
+func TestRegistry_ListPreservesInsertionOrder(t *testing.T) {
+	r := NewRegistry()
+	ids := []string{"cam-1", "link-1", "process-x", "link-2"}
+	for _, id := range ids {
+		r.Add(&Handle{ID: id})
+	}
+	r.Add(&Handle{ID: "link-1", Type: "replaced"}) // replacement keeps slot
+
+	got := r.List()
+	if len(got) != len(ids) {
+		t.Fatalf("len = %d, want %d", len(got), len(ids))
+	}
+	for i, want := range ids {
+		if got[i].ID != want {
+			t.Fatalf("position %d: got %q, want %q", i, got[i].ID, want)
+		}
+	}
+}

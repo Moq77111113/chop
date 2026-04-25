@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultBindAddr = "127.0.0.1:7080"
+	defaultBindAddr = "127.0.0.1:6700"
 	shutdownGrace   = 5 * time.Second
 	pathDashboard   = "/"
 )

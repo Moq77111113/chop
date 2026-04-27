@@ -35,7 +35,6 @@ type Styles struct {
 	Pill        ui.PillStyles
 }
 
-
 const (
 	rowOverhead = 4
 	minTitleW   = 8
@@ -50,51 +49,67 @@ const rightTotalW = statusSlotW + colGap + barsSlotW + colGap + rateSlotW
 
 // Render draws the row at exactly width cells.
 func Render(p Props, s Styles, width int) string {
-	title := p.Row.Title
-	if title == "" {
-		title = p.Row.ID
-	}
-	cursor := "  "
-	if p.Focused {
-		cursor = s.Cursor.Render("▸") + " "
-	}
+	title := titleOrID(p.Row)
+	cursor := renderCursor(p.Focused, s)
 	cursorW := lipgloss.Width(cursor)
-	knobIndent := strings.Repeat(" ", cursorW)
-
 	inner := max(width-rowOverhead, 10)
 
-	statusSlot := padRight(ui.Pill(p.Row.State, s.Pill), statusSlotW)
-	barsSlot := strings.Repeat(" ", barsSlotW)
-	if len(p.Row.Spark) > 0 {
-		barsSlot = padRight(ui.Spark(p.Row.Spark, s.Spark), barsSlotW)
-	}
-	rateSlot := strings.Repeat(" ", rateSlotW)
-	if p.Row.Rate != "" {
-		rateSlot = padLeft(s.Rate.Render(p.Row.Rate), rateSlotW)
-	}
-	gapStr := strings.Repeat(" ", colGap)
-	rightCluster := statusSlot + gapStr + barsSlot + gapStr + rateSlot
-
-	titleBudget := max(inner-cursorW-rightTotalW-colGap, minTitleW)
-	titleText := s.Title.Render(truncate(title, titleBudget))
-	spacer := strings.Repeat(" ", max(inner-cursorW-lipgloss.Width(titleText)-rightTotalW, colGap))
-	titleLine := padRight(cursor+titleText+spacer+rightCluster, inner)
-
-	body := titleLine
-	if p.Row.Type == data.BlockTypeLink {
-		knobLine := padRight(knobIndent+renderKnobs(p.Row.State, p.Row.Knobs, s), inner)
-		if p.Focused {
-			body += "\n" + strings.Repeat(" ", inner) + "\n" + knobLine
-		} else {
-			body += "\n" + knobLine
-		}
-	}
+	rightCluster := buildRightCluster(p.Row, s)
+	titleLine := composeTitleLine(cursor, cursorW, title, rightCluster, s.Title, inner)
+	body := composeBody(p.Row, s, p.Focused, titleLine, cursorW, inner)
 
 	frame := s.Row
 	if p.Focused {
 		frame = s.RowSelected
 	}
 	return frame.Render(body)
+}
+
+func titleOrID(r data.Row) string {
+	if r.Title != "" {
+		return r.Title
+	}
+	return r.ID
+}
+
+func renderCursor(focused bool, s Styles) string {
+	if focused {
+		return s.Cursor.Render("▸") + " "
+	}
+	return "  "
+}
+
+func buildRightCluster(row data.Row, s Styles) string {
+	statusSlot := padRight(ui.Pill(row.State, s.Pill), statusSlotW)
+	barsSlot := strings.Repeat(" ", barsSlotW)
+	if len(row.Spark) > 0 {
+		barsSlot = padRight(ui.Spark(row.Spark, s.Spark), barsSlotW)
+	}
+	rateSlot := strings.Repeat(" ", rateSlotW)
+	if row.Rate != "" {
+		rateSlot = padLeft(s.Rate.Render(row.Rate), rateSlotW)
+	}
+	gapStr := strings.Repeat(" ", colGap)
+	return statusSlot + gapStr + barsSlot + gapStr + rateSlot
+}
+
+func composeTitleLine(cursor string, cursorW int, title, rightCluster string, titleStyle lipgloss.Style, inner int) string {
+	titleBudget := max(inner-cursorW-rightTotalW-colGap, minTitleW)
+	titleText := titleStyle.Render(truncate(title, titleBudget))
+	spacer := strings.Repeat(" ", max(inner-cursorW-lipgloss.Width(titleText)-rightTotalW, colGap))
+	return padRight(cursor+titleText+spacer+rightCluster, inner)
+}
+
+func composeBody(row data.Row, s Styles, focused bool, titleLine string, cursorW, inner int) string {
+	if row.Type != data.BlockTypeLink {
+		return titleLine
+	}
+	knobIndent := strings.Repeat(" ", cursorW)
+	knobLine := padRight(knobIndent+renderKnobs(row.State, row.Knobs, s), inner)
+	if focused {
+		return titleLine + "\n" + strings.Repeat(" ", inner) + "\n" + knobLine
+	}
+	return titleLine + "\n" + knobLine
 }
 
 func padRight(line string, width int) string {

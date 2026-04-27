@@ -1,14 +1,10 @@
-package focused
+package knobs
 
-import (
-	"fmt"
-
-	"github.com/moq77111113/chop/internal/tui/knob"
-)
+import "fmt"
 
 // Knob configuration constants — all in display units (loss in %,
 // latency/jitter in ms, bandwidth in Mb/s). Conversion to wire format
-// happens in toSnapshot().
+// happens in Pane.toSnapshot().
 const (
 	lossScale     = 100.0  // value 0..30 in pct, snapshot 0..0.30 fraction
 	kbpsToMbps    = 1000.0 // bandwidth knob is Mb/s; wire is kbps
@@ -21,8 +17,8 @@ const (
 	jitterDanger  = 80.0
 )
 
-func defaultKnobs() [knobCount]knob.Knob {
-	return [knobCount]knob.Knob{
+func defaultKnobs() [KnobCount]Knob {
+	return [KnobCount]Knob{
 		KnobLoss:      lossKnob(),
 		KnobLatency:   latencyKnob(),
 		KnobJitter:    jitterKnob(),
@@ -30,8 +26,8 @@ func defaultKnobs() [knobCount]knob.Knob {
 	}
 }
 
-func lossKnob() knob.Knob {
-	return knob.Knob{
+func lossKnob() Knob {
+	return Knob{
 		Label:       "loss",
 		Min:         0,
 		Max:         30,
@@ -43,8 +39,8 @@ func lossKnob() knob.Knob {
 	}
 }
 
-func latencyKnob() knob.Knob {
-	return knob.Knob{
+func latencyKnob() Knob {
+	return Knob{
 		Label:       "latency",
 		Min:         0,
 		Max:         500,
@@ -56,8 +52,8 @@ func latencyKnob() knob.Knob {
 	}
 }
 
-func jitterKnob() knob.Knob {
-	return knob.Knob{
+func jitterKnob() Knob {
+	return Knob{
 		Label:       "jitter",
 		Min:         0,
 		Max:         150,
@@ -70,10 +66,10 @@ func jitterKnob() knob.Knob {
 }
 
 // bandwidthKnob axis: left=off (0 Mb/s), right=∞ (uncapped). Initial
-// value and reset target are both Max (∞), since "no impairment" is the
-// canonical neutral state for every chop knob.
-func bandwidthKnob() knob.Knob {
-	return knob.Knob{
+// value and reset target are both Max (∞), since "no impairment" is
+// the canonical neutral state for every chop knob.
+func bandwidthKnob() Knob {
+	return Knob{
 		Label:   "bandwidth",
 		Value:   bandwidthMax,
 		Min:     0,
@@ -95,26 +91,26 @@ func bandwidthKnob() knob.Knob {
 	}
 }
 
-func severityBands(warn, danger float64) func(float64) knob.Severity {
-	return func(v float64) knob.Severity {
+func severityBands(warn, danger float64) func(float64) Severity {
+	return func(v float64) Severity {
 		switch {
 		case v >= danger:
-			return knob.SevDanger
+			return SevDanger
 		case v >= warn:
-			return knob.SevWarn
+			return SevWarn
 		}
-		return knob.SevOK
+		return SevOK
 	}
 }
 
 // bandwidthSeverity reads the slider as "amount of bandwidth allowed":
 // at or near Max → ample (OK), middling → warn, near zero → danger.
-func bandwidthSeverity(v float64) knob.Severity {
+func bandwidthSeverity(v float64) Severity {
 	switch {
 	case v >= bandwidthMax/2:
-		return knob.SevOK
+		return SevOK
 	case v >= 1:
-		return knob.SevWarn
+		return SevWarn
 	}
-	return knob.SevDanger
+	return SevDanger
 }

@@ -7,6 +7,8 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/moq77111113/chop/internal/tui/data"
 )
 
 const (
@@ -17,15 +19,15 @@ const (
 type toastClearMsg struct{}
 
 // copyAsFlagsCmd serialises the focused link's controls as a `--override`
-// flag string and writes it to the system clipboard. A toast confirms the
-// copy (or surfaces a clipboard error if xclip / wl-copy / equivalent is
-// missing).
+// flag string and writes it to the system clipboard. A toast confirms
+// the copy (or surfaces a clipboard error if xclip / wl-copy /
+// equivalent is missing).
 func (a *App) copyAsFlagsCmd() tea.Cmd {
-	id := a.focused.LinkID
+	id := a.focusedLinkID()
 	if id == "" {
 		return a.showToastCmd("nothing to copy — pick a link first")
 	}
-	snap, ok := a.data.links[id]
+	snap, ok := a.links[id]
 	if !ok {
 		return a.showToastCmd("waiting on first snapshot…")
 	}
@@ -37,27 +39,22 @@ func (a *App) copyAsFlagsCmd() tea.Cmd {
 }
 
 func (a *App) showToastCmd(msg string) tea.Cmd {
-	a.ui.toastMsg = msg
-	a.ui.toastFlag = ""
-	a.ui.toastUntil = time.Now().Add(toastDuration)
+	a.ui.ShowToast(msg, time.Now().Add(toastDuration))
 	return tea.Tick(toastDuration, func(time.Time) tea.Msg { return toastClearMsg{} })
 }
 
-// showCopyToastCmd renders the rich copy-as-flags toast: success chip on
-// the left, the would-be CLI invocation in the middle, "paste anywhere"
-// hint on the right. The flag content is the override the user can paste
-// into a future `chop run`.
+// showCopyToastCmd renders the rich copy-as-flags toast: success chip
+// on the left, the would-be CLI invocation in the middle, "paste
+// anywhere" hint on the right.
 func (a *App) showCopyToastCmd(flag string) tea.Cmd {
-	a.ui.toastMsg = "copied"
-	a.ui.toastFlag = flag
-	a.ui.toastUntil = time.Now().Add(toastDuration)
+	a.ui.ShowCopyToast(flag, time.Now().Add(toastDuration))
 	return tea.Tick(toastDuration, func(time.Time) tea.Msg { return toastClearMsg{} })
 }
 
-// formatOverrideFlag emits the canonical `<id>:<knob>=<val>,…` form. All
-// four knobs are always written so a paste-back round-trips deterministically
-// regardless of the originating block's defaults.
-func formatOverrideFlag(id string, snap linkSnapshot) string {
+// formatOverrideFlag emits the canonical `<id>:<knob>=<val>,…` form.
+// All four knobs are always written so a paste-back round-trips
+// deterministically regardless of the originating block's defaults.
+func formatOverrideFlag(id string, snap data.LinkSnapshot) string {
 	const (
 		percentScale = 100.0
 		kbpsToMbps   = 1000.0

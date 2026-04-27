@@ -1,26 +1,24 @@
-// Package intent renders the "stream looks like" strip — the highest-leverage
-// element on the focused-link pane. Body copy is generated from the link's
-// state and impairment values; humans don't author per-state strings.
+// Package intent classifies a link's impairment state into a severity
+// + headline + body copy. It owns the human-readable language; it does
+// not own the rendering. components/intentstrip frames the verdict.
 package intent
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/charmbracelet/lipgloss"
-)
+import "fmt"
 
 // Severity drives both the border and label color of the strip.
 type Severity int
 
+// Severity bands — calm baseline, warning when something's tugging,
+// bad when the stream's gone or the link's down.
 const (
 	Calm Severity = iota
 	Warning
 	Bad
 )
 
-// Snapshot is the slice of link state the intent strip needs. Decoupled from
-// any block-package types so the TUI stays a leaf consumer.
+// Snapshot is the slice of link state the intent classifier needs.
+// Decoupled from any block-package types so the TUI stays a leaf
+// consumer.
 type Snapshot struct {
 	Loss          float64 // 0..1
 	LatencyMs     uint32
@@ -31,41 +29,25 @@ type Snapshot struct {
 	HasController bool // false for source blocks
 }
 
-// Styles is the small palette the strip needs from the parent theme.
-type Styles struct {
-	Calm    lipgloss.Style // border + label
-	Warning lipgloss.Style
-	Bad     lipgloss.Style
-	Body    lipgloss.Style
-	Number  lipgloss.Style
-	Frame   [3]lipgloss.Style // border styles indexed by Severity
+// Verdict is the structured output of Classify: a severity band, the
+// short headline label ("STREAM LOOKS LIKE" / "LINK IS DOWN"), and
+// the descriptive body composed from the relevant clauses.
+type Verdict struct {
+	Severity Severity
+	Label    string
+	Body     string
 }
 
-// Render returns the bordered strip sized to width.
-func Render(s Snapshot, st Styles, width int) string {
+// Classify produces the verdict for a snapshot. Pure function — no
+// rendering, no styling.
+func Classify(s Snapshot) Verdict {
 	sev, label, body := compose(s)
-	innerW := max(width-4, 1)
-	wrapped := wrap(st.Body.Render(body), innerW)
-	content := st.styleFor(sev).Render(label) + "\n" + wrapped
-	frame := st.Frame[sev]
-	return frame.Width(width).Render(content)
+	return Verdict{Severity: sev, Label: label, Body: body}
 }
 
-// SeverityOf is exposed so the parent pane can pick a frame color in sync.
-func SeverityOf(s Snapshot) Severity {
-	sev, _, _ := compose(s)
-	return sev
-}
-
-func (st Styles) styleFor(sev Severity) lipgloss.Style {
-	switch sev {
-	case Bad:
-		return st.Bad
-	case Warning:
-		return st.Warning
-	}
-	return st.Calm
-}
+// SeverityOf returns just the severity for callers that only need the
+// frame colour decision.
+func SeverityOf(s Snapshot) Severity { return Classify(s).Severity }
 
 const (
 	headerLabel     = "STREAM LOOKS LIKE"
@@ -73,8 +55,9 @@ const (
 )
 
 // compose picks the highest-severity clause from §6 of DESIGN.md and
-// optionally appends a secondary one. The return is (severity, header, body).
-// A down link gets its own header so the strip reads as a status, not a guess.
+// optionally appends a secondary one. The return is (severity, header,
+// body). A down link gets its own header so the strip reads as a
+// status, not a guess.
 func compose(s Snapshot) (Severity, string, string) {
 	if !s.LinkUp {
 		return Bad, headerDownLabel, "consumer disconnected. perturbations preserved — they reapply on reconnect."
@@ -191,30 +174,4 @@ func topTwo(cs []clause) (clause, clause) {
 		b = cs[len(cs)-1]
 	}
 	return a, b
-}
-
-func wrap(s string, width int) string {
-	if width <= 0 || lipgloss.Width(s) <= width {
-		return s
-	}
-	words := strings.Fields(s)
-	var lines []string
-	cur := ""
-	for _, w := range words {
-		candidate := cur
-		if cur != "" {
-			candidate += " "
-		}
-		candidate += w
-		if lipgloss.Width(candidate) > width && cur != "" {
-			lines = append(lines, cur)
-			cur = w
-			continue
-		}
-		cur = candidate
-	}
-	if cur != "" {
-		lines = append(lines, cur)
-	}
-	return strings.Join(lines, "\n")
 }

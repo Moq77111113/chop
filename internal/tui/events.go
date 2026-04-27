@@ -6,18 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/moq77111113/chop/internal/supervisor"
+	"github.com/moq77111113/chop/internal/tui/components/events"
 )
 
-const (
-	eventsBufferSize = 50
-	eventsRender     = 6
-)
+const eventsBufferSize = 50
 
-// uiEvent is the rendered form of a supervisor event — pre-derived level
-// and pre-formatted message so the renderer is pure formatting.
+// uiEvent is the rendered form of a supervisor event — pre-derived
+// level and pre-formatted message so the renderer is pure formatting.
 type uiEvent struct {
 	when    time.Time
 	level   string
@@ -32,9 +28,9 @@ type EventMsg struct{ Event supervisor.Event }
 
 func (a *App) appendEvent(ev supervisor.Event) {
 	ui := decodeEvent(ev)
-	a.data.events = append(a.data.events, ui)
-	if len(a.data.events) > eventsBufferSize {
-		a.data.events = a.data.events[len(a.data.events)-eventsBufferSize:]
+	a.events = append(a.events, ui)
+	if len(a.events) > eventsBufferSize {
+		a.events = a.events[len(a.events)-eventsBufferSize:]
 	}
 }
 
@@ -85,53 +81,18 @@ func formatEventMessage(kind string, payload json.RawMessage, blockID string) st
 	return kind
 }
 
-type eventStyles struct {
-	header lipgloss.Style
-	time   lipgloss.Style
-	source lipgloss.Style
-	body   lipgloss.Style
-	inf    lipgloss.Style
-	wrn    lipgloss.Style
-	err    lipgloss.Style
-}
-
-func newEventStyles(t Theme) eventStyles {
-	return eventStyles{
-		header: lipgloss.NewStyle().Foreground(t.Muted).Bold(true).MarginTop(1),
-		time:   lipgloss.NewStyle().Foreground(t.Dim),
-		source: lipgloss.NewStyle().Foreground(t.Muted),
-		body:   lipgloss.NewStyle().Foreground(t.Fg),
-		inf:    lipgloss.NewStyle().Foreground(t.Info).Bold(true),
-		wrn:    lipgloss.NewStyle().Foreground(t.Warn).Bold(true),
-		err:    lipgloss.NewStyle().Foreground(t.Danger).Bold(true),
+// toEventList projects the App's stored uiEvent slice into the
+// component's input shape. Cheap copy per render — the buffer is
+// capped at eventsBufferSize.
+func toEventList(src []uiEvent) []events.Event {
+	out := make([]events.Event, len(src))
+	for i, e := range src {
+		out[i] = events.Event{
+			When:    e.when,
+			Level:   e.level,
+			Source:  e.source,
+			Message: e.message,
+		}
 	}
-}
-
-func (s eventStyles) levelTag(level string) string {
-	switch level {
-	case "WRN":
-		return s.wrn.Render(level)
-	case "ERR":
-		return s.err.Render(level)
-	}
-	return s.inf.Render(level)
-}
-
-// renderEventsTicker draws the bottom-of-left-pane events list. Returns
-// empty string when no events have been seen yet.
-func renderEventsTicker(events []uiEvent, s eventStyles, _ int) string {
-	if len(events) == 0 {
-		return ""
-	}
-	start := max(0, len(events)-eventsRender)
-	tail := events[start:]
-	lines := []string{s.header.Render("EVENTS · GLOBAL")}
-	for _, ev := range tail {
-		ts := s.time.Render(ev.when.Format("15:04:05"))
-		lvl := s.levelTag(ev.level)
-		src := s.source.Render(ev.source)
-		body := s.body.Render(ev.message)
-		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s", ts, lvl, src, body))
-	}
-	return strings.Join(lines, "\n")
+	return out
 }

@@ -27,8 +27,7 @@ type Theme struct {
 	Selected  lipgloss.Style
 }
 
-// DefaultTheme returns the canonical chop palette as sRGB approximations of
-// the oklch tokens spec'd in DESIGN.md §2.
+// DefaultTheme returns the canonical chop palette as sRGB
 func DefaultTheme() Theme {
 	t := Theme{
 		Bg:      lipgloss.Color("#1c1f29"),

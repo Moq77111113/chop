@@ -4,8 +4,9 @@ package data
 // renderer dispatch. Stay strings — they match the Type field on
 // supervisor.Handle (the wire identity).
 const (
-	BlockTypeLink   = "link"
-	BlockTypeSource = "source"
+	BlockTypeLink    = "link"
+	BlockTypeSource  = "source"
+	BlockTypeProcess = "process"
 )
 
 // Row is the cross-layer view of one block-list entry. Logic packages

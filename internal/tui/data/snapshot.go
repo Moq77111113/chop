@@ -84,3 +84,22 @@ func DecodeSource(snap block.Snapshot) (SourceSnapshot, bool) {
 	}
 	return ss, true
 }
+
+// ProcessSnapshot is the TUI-local projection of a process block's snapshot.
+type ProcessSnapshot struct {
+	Status     block.Status
+	PID        int      `json:"pid"`
+	ExitCode   *int     `json:"exit_code"`
+	StderrTail []string `json:"stderr_tail"`
+}
+
+// DecodeProcess decodes a block.Snapshot into a ProcessSnapshot. Returns
+// ok=false when the JSON payload is malformed.
+func DecodeProcess(snap block.Snapshot) (ProcessSnapshot, bool) {
+	var ps ProcessSnapshot
+	if err := json.Unmarshal(snap.Stats, &ps); err != nil {
+		return ProcessSnapshot{}, false
+	}
+	ps.Status = snap.Status
+	return ps, true
+}

@@ -105,6 +105,34 @@ blocks:
 	}
 }
 
+func TestLoad_RejectsProcessBlockMissingCmd(t *testing.T) {
+	p := writeTmp(t, `
+name: t
+blocks:
+  - id: relay
+    type: process
+    config: {}
+`)
+	_, err := Load(p)
+	if err == nil || !strings.Contains(err.Error(), "cmd is required") {
+		t.Fatalf("expected cmd-required error, got %v", err)
+	}
+}
+
+func TestLoad_AcceptsProcessBlockWithCmd(t *testing.T) {
+	p := writeTmp(t, `
+name: t
+blocks:
+  - id: relay
+    type: process
+    config:
+      cmd: mediamtx
+`)
+	if _, err := Load(p); err != nil {
+		t.Fatalf("Load err = %v, want nil", err)
+	}
+}
+
 func writeTmp(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()

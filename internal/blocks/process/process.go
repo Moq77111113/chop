@@ -5,12 +5,17 @@
 package process
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/moq77111113/chop/block"
@@ -22,6 +27,10 @@ const (
 
 	eventStarted = "process.started"
 	eventExited  = "process.exited"
+
+	shutdownGrace  = 5 * time.Second
+	stderrScanMax  = 1024 * 1024
+	stderrScanInit = 64 * 1024
 )
 
 // ErrMissingCmd is the sentinel returned when a process block declaration
@@ -97,7 +106,76 @@ func (b *ProcessBlock) Run(ctx context.Context) error {
 	if b.parseErr != nil {
 		return b.parseErr
 	}
-	return errors.New("process: Run not yet implemented")
+
+	cmd := exec.CommandContext(ctx, b.proc.Cmd, b.proc.Args...)
+	cmd.Env = mergedEnv(b.proc.Env)
+	cmd.Dir = b.proc.Cwd
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	cmd.WaitDelay = shutdownGrace
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("process: stderr pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("process: start %s: %w", b.proc.Cmd, err)
+	}
+	b.pid.Store(int32(cmd.Process.Pid))
+	b.setStatus(block.StatusRunning, nil)
+	block.Emit(ctx, eventStarted, map[string]int{"pid": cmd.Process.Pid})
+
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		drainStderr(stderrPipe, b.stderr)
+	}()
+
+	waitErr := cmd.Wait()
+	<-drainDone
+
+	code, status := classifyExit(waitErr)
+	b.setStatus(status, &code)
+	block.Emit(ctx, eventExited, map[string]int{"code": code})
+	return nil
+}
+
+func mergedEnv(extra map[string]string) []string {
+	if len(extra) == 0 {
+		return nil
+	}
+	base := append([]string{}, os.Environ()...)
+	for k, v := range extra {
+		base = append(base, k+"="+v)
+	}
+	return base
+}
+
+func drainStderr(r io.Reader, dst *ring) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, stderrScanInit), stderrScanMax)
+	for sc.Scan() {
+		dst.append(sc.Text())
+	}
+}
+
+func classifyExit(err error) (code int, status block.Status) {
+	if err == nil {
+		return 0, block.StatusStopped
+	}
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		return exitErr.ExitCode(), block.StatusDown
+	}
+	return -1, block.StatusDown
+}
+
+func (b *ProcessBlock) setStatus(s block.Status, code *int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.status = s
+	b.exitCode = code
 }
 
 func parseConfig(raw json.RawMessage) (Config, error) {

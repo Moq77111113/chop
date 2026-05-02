@@ -197,6 +197,24 @@ func (a *App) syncFocusedFromSelection() {
 	a.pane.SetSnapshot(focusedSnapshotFor(r, a.links))
 }
 
+func (a *App) killCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), snapshotBudget)
+		defer cancel()
+		_ = a.sup.Kill(ctx, id)
+		return nil
+	}
+}
+
+func (a *App) restartCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), snapshotBudget)
+		defer cancel()
+		_ = a.sup.Restart(ctx, id)
+		return nil
+	}
+}
+
 func focusedSnapshotFor(r data.Row, links map[string]data.LinkSnapshot) knobs.Snapshot {
 	up := r.State == data.StateUp || r.State == data.StateDegraded
 	snap, ok := links[r.ID]

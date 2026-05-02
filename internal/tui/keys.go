@@ -37,6 +37,14 @@ func (a *App) handleKey(msg tea.KeyMsg) tea.Cmd {
 		a.ui.BeginConfirmReset()
 		return nil
 	}
+	if r, ok := a.selectedRow(); ok {
+		switch {
+		case key.Matches(msg, a.keymap.Kill):
+			return a.killCmd(r.ID)
+		case key.Matches(msg, a.keymap.Restart):
+			return a.restartCmd(r.ID)
+		}
+	}
 	if a.ui.Focus == state.FocusList {
 		return a.handleListKey(msg)
 	}
@@ -101,6 +109,8 @@ func (a *App) statusbarProps() statusbar.Props {
 			{Key: "←→", Label: "adjust"},
 			{Key: "y", Label: "copy"},
 			{Key: "r", Label: "reset"},
+			{Key: "K", Label: "kill"},
+			{Key: "R", Label: "restart"},
 			{Key: "esc", Label: "back"},
 			{Key: "?", Label: "help"},
 		}}
@@ -108,6 +118,8 @@ func (a *App) statusbarProps() statusbar.Props {
 	return statusbar.Props{Hints: []statusbar.Hint{
 		{Key: "↑↓", Label: "pick link"},
 		{Key: "↵", Label: "drill in"},
+		{Key: "K", Label: "kill"},
+		{Key: "R", Label: "restart"},
 		{Key: "?", Label: "help"},
 		{Key: "q", Label: "quit"},
 	}}
@@ -124,7 +136,11 @@ func (a *App) helpGroups() []help.Group {
 			{Keys: "← → / h l", Desc: "decrease / increase the focused knob"},
 			{Keys: "0", Desc: "zero the focused knob"},
 			{Keys: "r", Desc: "reset all knobs on the focused link"},
-			{Keys: "R", Desc: "reset every link"},
+			{Keys: "ctrl+r", Desc: "reset every link"},
+		}},
+		{Title: "block actions", Bindings: []help.Binding{
+			{Keys: "K", Desc: "kill the focused block (SIGTERM, then SIGKILL after 5s)"},
+			{Keys: "R", Desc: "restart the focused block (kill if alive + respawn)"},
 		}},
 		{Title: "capture", Bindings: []help.Binding{
 			{Keys: "y", Desc: "copy current perturbation as flags"},

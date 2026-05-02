@@ -7,17 +7,20 @@ import (
 
 	"github.com/moq77111113/chop/block"
 	"github.com/moq77111113/chop/internal/blocks/link"
+	"github.com/moq77111113/chop/internal/blocks/process"
 	"github.com/moq77111113/chop/internal/blocks/source"
 )
 
 const (
-	blockTypeSource = "source"
-	blockTypeLink   = "link"
+	blockTypeSource  = "source"
+	blockTypeLink    = "link"
+	blockTypeProcess = "process"
 )
 
 var builtinBlocks = map[string]block.Factory{
-	blockTypeSource: source.New,
-	blockTypeLink:   link.New,
+	blockTypeSource:  source.New,
+	blockTypeLink:    link.New,
+	blockTypeProcess: process.New,
 }
 
 var blockCmd = &cobra.Command{

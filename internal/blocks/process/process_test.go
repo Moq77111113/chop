@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -22,14 +23,14 @@ func TestNew_MissingCmdSurfacesOnRun(t *testing.T) {
 	}
 }
 
-func TestSnapshot_BeforeRunReportsStoppedZeroPid(t *testing.T) {
+func TestSnapshot_BeforeRunReportsZeroState(t *testing.T) {
 	b := process.New(block.Config{
 		ID: "p", Type: "process",
 		Static: mustJSON(t, process.Config{Cmd: "true"}),
 	})
 	snap := b.Snapshot()
-	if snap.Status != block.StatusStopped {
-		t.Fatalf("status = %q, want stopped", snap.Status)
+	if snap.Status != "" {
+		t.Fatalf("status = %q, want empty (pre-run)", snap.Status)
 	}
 	var s struct {
 		PID        int      `json:"pid"`
@@ -70,11 +71,7 @@ func TestRun_TrueExitsCleanlyAndReportsStopped(t *testing.T) {
 		ID: "p", Type: "process",
 		Static: mustJSON(t, process.Config{Cmd: "true"}),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := b.Run(ctx); err != nil {
-		t.Fatalf("Run err = %v, want nil", err)
-	}
+	awaitChildExit(t, b, 2*time.Second)
 	snap := b.Snapshot()
 	if snap.Status != block.StatusStopped {
 		t.Fatalf("status = %q, want stopped", snap.Status)
@@ -93,9 +90,7 @@ func TestRun_FalseExitsNonZeroAndReportsDown(t *testing.T) {
 		ID: "p", Type: "process",
 		Static: mustJSON(t, process.Config{Cmd: "false"}),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = b.Run(ctx)
+	awaitChildExit(t, b, 2*time.Second)
 	snap := b.Snapshot()
 	if snap.Status != block.StatusDown {
 		t.Fatalf("status = %q, want down", snap.Status)
@@ -117,9 +112,7 @@ func TestRun_CapturesStderrIntoRing(t *testing.T) {
 			Args: []string{"-c", "echo line-one >&2; echo line-two >&2"},
 		}),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = b.Run(ctx)
+	awaitChildExit(t, b, 2*time.Second)
 	snap := b.Snapshot()
 	var s struct {
 		StderrTail []string `json:"stderr_tail"`
@@ -128,6 +121,42 @@ func TestRun_CapturesStderrIntoRing(t *testing.T) {
 	if len(s.StderrTail) < 2 || s.StderrTail[len(s.StderrTail)-2] != "line-one" || s.StderrTail[len(s.StderrTail)-1] != "line-two" {
 		t.Fatalf("stderr tail = %v, want [..., line-one, line-two]", s.StderrTail)
 	}
+}
+
+// awaitChildExit starts Run in a goroutine, waits for the wrapped CLI to
+// transition through Running and out the other side (Stopped or Down),
+// then cancels the context so Run returns. Models how the supervisor
+// drives the block: Run stays alive until the supervisor cancels.
+func awaitChildExit(t *testing.T, b interface {
+	Run(context.Context) error
+	Snapshot() block.Snapshot
+}, deadline time.Duration) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- b.Run(ctx) }()
+
+	saw := awaitStatus(b, deadline, block.StatusRunning, block.StatusStopped, block.StatusDown)
+	if saw != block.StatusStopped && saw != block.StatusDown {
+		// child reached Running but never exited within deadline
+		_ = awaitStatus(b, deadline, block.StatusStopped, block.StatusDown)
+	}
+	cancel()
+	<-done
+}
+
+func awaitStatus(b interface {
+	Snapshot() block.Snapshot
+}, deadline time.Duration, want ...block.Status) block.Status {
+	limit := time.Now().Add(deadline)
+	for time.Now().Before(limit) {
+		st := b.Snapshot().Status
+		if slices.Contains(want, st) {
+			return st
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return ""
 }
 
 func TestRun_CtxCancelStopsRunningChild(t *testing.T) {

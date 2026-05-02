@@ -79,7 +79,6 @@ func New(c block.Config) block.Block {
 		proc:     cfg,
 		parseErr: err,
 		stderr:   newRing(stderrRingSize),
-		status:   block.StatusStopped,
 	}
 }
 
@@ -120,6 +119,10 @@ func (b *ProcessBlock) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("process: stderr pipe: %w", err)
 	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("process: stdout pipe: %w", err)
+	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("process: start %s: %w", b.proc.Cmd, err)
 	}
@@ -127,18 +130,23 @@ func (b *ProcessBlock) Run(ctx context.Context) error {
 	b.setStatus(block.StatusRunning, nil)
 	block.Emit(ctx, eventStarted, map[string]int{"pid": cmd.Process.Pid})
 
-	drainDone := make(chan struct{})
-	go func() {
-		defer close(drainDone)
-		drainStderr(stderrPipe, b.stderr)
-	}()
+	var drainWG sync.WaitGroup
+	drainWG.Add(2)
+	go func() { defer drainWG.Done(); drainStderr(stderrPipe, b.stderr) }()
+	go func() { defer drainWG.Done(); drainStderr(stdoutPipe, b.stderr) }()
 
 	waitErr := cmd.Wait()
-	<-drainDone
+	drainWG.Wait()
 
 	code, status := classifyExit(waitErr)
 	b.setStatus(status, &code)
 	block.Emit(ctx, eventExited, map[string]int{"code": code})
+
+	// Stay alive after the wrapped CLI exits so Snapshot/Apply keep
+	// answering — the supervisor relies on this to surface the final
+	// status and to honour Restart. Block until the supervisor cancels
+	// the Run context.
+	<-ctx.Done()
 	return nil
 }
 

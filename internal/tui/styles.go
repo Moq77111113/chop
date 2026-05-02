@@ -12,6 +12,7 @@ import (
 	"github.com/moq77111113/chop/internal/tui/components/knob"
 	"github.com/moq77111113/chop/internal/tui/components/linkcard"
 	"github.com/moq77111113/chop/internal/tui/components/linklist"
+	"github.com/moq77111113/chop/internal/tui/components/processpane"
 	"github.com/moq77111113/chop/internal/tui/components/sourcepane"
 	"github.com/moq77111113/chop/internal/tui/components/statusbar"
 	"github.com/moq77111113/chop/internal/tui/components/titlebar"
@@ -74,6 +75,19 @@ func newEmptyStyles(t Theme) empty.Styles {
 		ExampleCommand: lipgloss.NewStyle().Foreground(t.Fg),
 		ExampleArg:     lipgloss.NewStyle().Foreground(t.Primary),
 		Kbd:            newKbdStyles(t),
+	}
+}
+
+// newProcesspaneStyles builds the right-pane process-block palette.
+func newProcesspaneStyles(t Theme) processpane.Styles {
+	return processpane.Styles{
+		Header:  lipgloss.NewStyle().Foreground(t.Fg).Bold(true),
+		Subtle:  lipgloss.NewStyle().Foreground(t.Dim),
+		Frame:   lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.Line2).Padding(0, 1),
+		Label:   lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		StatKey: lipgloss.NewStyle().Foreground(t.Muted),
+		StatVal: lipgloss.NewStyle().Foreground(t.Fg).Bold(true),
+		Pill:    newPillStyles(t),
 	}
 }
 

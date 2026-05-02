@@ -61,10 +61,11 @@ type App struct {
 
 	configs map[string]json.RawMessage
 
-	ui      state.UI
-	links   map[string]data.LinkSnapshot
-	sources map[string]data.SourceSnapshot
-	history *state.History
+	ui        state.UI
+	links     map[string]data.LinkSnapshot
+	sources   map[string]data.SourceSnapshot
+	processes map[string]data.ProcessSnapshot
+	history   *state.History
 	events  []uiEvent
 	linksAt time.Time
 
@@ -87,9 +88,10 @@ func New(sup *supervisor.Supervisor, sc *scenario.Scenario) *App {
 		keymap:  DefaultKeymap(),
 		pane:    knobs.NewPane(),
 		configs: configs,
-		links:   map[string]data.LinkSnapshot{},
-		sources: map[string]data.SourceSnapshot{},
-		history: state.NewHistory(),
+		links:     map[string]data.LinkSnapshot{},
+		sources:   map[string]data.SourceSnapshot{},
+		processes: map[string]data.ProcessSnapshot{},
+		history:   state.NewHistory(),
 		styles: uiStyles{
 			titlebar:   newTitlebarStyles(t),
 			statusbar:  newStatusbarStyles(t),

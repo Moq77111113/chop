@@ -24,9 +24,10 @@ const (
 type tickMsg struct{}
 
 type rowsMsg struct {
-	rows    []data.Row
-	links   map[string]data.LinkSnapshot
-	sources map[string]data.SourceSnapshot
+	rows      []data.Row
+	links     map[string]data.LinkSnapshot
+	sources   map[string]data.SourceSnapshot
+	processes map[string]data.ProcessSnapshot
 }
 
 func (a *App) tickCmd() tea.Cmd {
@@ -43,20 +44,26 @@ func (a *App) fetchCmd() tea.Cmd {
 		rows := make([]data.Row, 0, len(handles))
 		links := map[string]data.LinkSnapshot{}
 		sources := map[string]data.SourceSnapshot{}
+		processes := map[string]data.ProcessSnapshot{}
 		for _, h := range handles {
 			snap, err := h.Snapshot(ctx)
 			st := data.StateStarting
 			if err == nil {
 				st = data.MapState(snap.Status)
-				decodeHandleSnapshot(h, snap, links, sources)
+				decodeHandleSnapshot(h, snap, links, sources, processes)
 			}
 			rows = append(rows, data.Row{ID: h.ID, Type: h.Type, State: st})
 		}
-		return rowsMsg{rows: rows, links: links, sources: sources}
+		return rowsMsg{rows: rows, links: links, sources: sources, processes: processes}
 	}
 }
 
-func decodeHandleSnapshot(h *supervisor.Handle, snap block.Snapshot, links map[string]data.LinkSnapshot, sources map[string]data.SourceSnapshot) {
+func decodeHandleSnapshot(
+	h *supervisor.Handle, snap block.Snapshot,
+	links map[string]data.LinkSnapshot,
+	sources map[string]data.SourceSnapshot,
+	processes map[string]data.ProcessSnapshot,
+) {
 	switch h.Type {
 	case data.BlockTypeLink:
 		if ls, ok := data.DecodeLink(snap); ok {
@@ -65,6 +72,10 @@ func decodeHandleSnapshot(h *supervisor.Handle, snap block.Snapshot, links map[s
 	case data.BlockTypeSource:
 		if ss, ok := data.DecodeSource(snap); ok {
 			sources[h.ID] = ss
+		}
+	case data.BlockTypeProcess:
+		if ps, ok := data.DecodeProcess(snap); ok {
+			processes[h.ID] = ps
 		}
 	}
 }
@@ -77,6 +88,7 @@ func (a *App) applyRowsMsg(msg rowsMsg) {
 	rates := data.ComputeRates(a.links, msg.links, now.Sub(a.linksAt))
 	a.links = msg.links
 	a.sources = msg.sources
+	a.processes = msg.processes
 	a.linksAt = now
 	for id, mbps := range rates {
 		a.history.Push(id, mbps)

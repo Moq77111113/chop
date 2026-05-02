@@ -3,18 +3,25 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/moq77111113/chop/block"
+	"github.com/moq77111113/chop/internal/scenario"
 )
 
-// Handle is the supervisor-side reference to a running block. It exposes
-// the public RPC surface (Snapshot, Apply) without leaking the underlying
-// child process to API consumers.
+// Handle is the supervisor-side reference to a running block. It carries
+// the original scenario.Block so Restart can re-spawn from the same
+// declaration, and a cancel func so Kill / Restart can stop the child
+// without disturbing the run-wide context.
 type Handle struct {
 	ID    string
 	Type  string
+	block scenario.Block
 	child *child
+
+	mu     sync.Mutex
+	cancel context.CancelFunc
 }
 
 // Snapshot calls the block's snapshot method over JSON-RPC and decodes the
@@ -35,6 +42,18 @@ func (h *Handle) Snapshot(ctx context.Context) (block.Snapshot, error) {
 func (h *Handle) Apply(ctx context.Context, controls json.RawMessage) error {
 	_, err := h.child.rpc.Call(ctx, block.MethodApply, controls)
 	return err
+}
+
+// stop cancels the child's context (firing cmd.Cancel = SIGTERM, then
+// SIGKILL after WaitDelay) and waits for the process to exit.
+func (h *Handle) stop() {
+	h.mu.Lock()
+	cancel := h.cancel
+	h.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	_ = h.child.wait()
 }
 
 // Registry tracks the running blocks of a Supervisor by id. List preserves
@@ -79,4 +98,8 @@ func (r *Registry) List() []*Handle {
 		out = append(out, r.blocks[id])
 	}
 	return out
+}
+
+func errBlockNotFound(id string) error {
+	return fmt.Errorf("supervisor: no block with id %q", id)
 }

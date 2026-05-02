@@ -57,6 +57,8 @@ func levelAndSource(kind string) (level, source string) {
 		return "ERR", src
 	case strings.HasSuffix(kind, ".warn"), strings.Contains(kind, "spike"):
 		return "WRN", src
+	case kind == "process.exited":
+		return "WRN", src
 	}
 	return "INF", src
 }
@@ -74,6 +76,22 @@ func formatEventMessage(kind string, payload json.RawMessage, blockID string) st
 		return blockID + " up"
 	case "source.up":
 		return blockID + " up"
+	case "process.started":
+		var p struct {
+			PID int `json:"pid"`
+		}
+		_ = json.Unmarshal(payload, &p)
+		return fmt.Sprintf("%s started (pid %d)", blockID, p.PID)
+	case "process.exited":
+		var p struct {
+			Code int `json:"code"`
+		}
+		_ = json.Unmarshal(payload, &p)
+		return fmt.Sprintf("%s exited (code %d)", blockID, p.Code)
+	case "block.kill_requested":
+		return blockID + " kill requested"
+	case "block.restarted":
+		return blockID + " restarted"
 	}
 	if len(payload) > 0 && string(payload) != "null" {
 		return kind + " " + string(payload)

@@ -17,6 +17,7 @@ import (
 	"github.com/moq77111113/chop/internal/tui/components/focused"
 	"github.com/moq77111113/chop/internal/tui/components/help"
 	"github.com/moq77111113/chop/internal/tui/components/linklist"
+	"github.com/moq77111113/chop/internal/tui/components/processpane"
 	"github.com/moq77111113/chop/internal/tui/components/sourcepane"
 	"github.com/moq77111113/chop/internal/tui/components/statusbar"
 	"github.com/moq77111113/chop/internal/tui/components/titlebar"
@@ -37,9 +38,10 @@ const (
 type uiStyles struct {
 	titlebar   titlebar.Styles
 	statusbar  statusbar.Styles
-	emptyPane  empty.Styles
-	sourcePane sourcepane.Styles
-	list       linklist.Styles
+	emptyPane   empty.Styles
+	sourcePane  sourcepane.Styles
+	processPane processpane.Styles
+	list        linklist.Styles
 	focus      focused.Styles
 	help       help.Styles
 	coach      coach.Styles
@@ -61,10 +63,11 @@ type App struct {
 
 	configs map[string]json.RawMessage
 
-	ui      state.UI
-	links   map[string]data.LinkSnapshot
-	sources map[string]data.SourceSnapshot
-	history *state.History
+	ui        state.UI
+	links     map[string]data.LinkSnapshot
+	sources   map[string]data.SourceSnapshot
+	processes map[string]data.ProcessSnapshot
+	history   *state.History
 	events  []uiEvent
 	linksAt time.Time
 
@@ -87,15 +90,17 @@ func New(sup *supervisor.Supervisor, sc *scenario.Scenario) *App {
 		keymap:  DefaultKeymap(),
 		pane:    knobs.NewPane(),
 		configs: configs,
-		links:   map[string]data.LinkSnapshot{},
-		sources: map[string]data.SourceSnapshot{},
-		history: state.NewHistory(),
+		links:     map[string]data.LinkSnapshot{},
+		sources:   map[string]data.SourceSnapshot{},
+		processes: map[string]data.ProcessSnapshot{},
+		history:   state.NewHistory(),
 		styles: uiStyles{
 			titlebar:   newTitlebarStyles(t),
 			statusbar:  newStatusbarStyles(t),
-			emptyPane:  newEmptyStyles(t),
-			sourcePane: newSourcepaneStyles(t),
-			list:       newLinklistStyles(t),
+			emptyPane:   newEmptyStyles(t),
+			sourcePane:  newSourcepaneStyles(t),
+			processPane: newProcesspaneStyles(t),
+			list:        newLinklistStyles(t),
 			focus:      newFocusedStyles(t),
 			help:       newHelpStyles(t),
 			coach:      newCoachStyles(t),

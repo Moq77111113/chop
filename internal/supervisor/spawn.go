@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -20,6 +19,9 @@ const (
 	flagStaticConfig = "-config"
 	flagInitControls = "-controls"
 	shutdownGrace    = 5 * time.Second
+
+	stderrScanInit = 64 * 1024
+	stderrScanMax  = 1024 * 1024
 )
 
 type child struct {
@@ -57,13 +59,20 @@ func spawnChild(ctx context.Context, exe, blockType, id string, staticCfg, contr
 		return nil, fmt.Errorf("start child %s: %w", id, err)
 	}
 
-	go relayStderr(id, stderr)
+	// Drain to discard. The pipe must be read or the child blocks once it
+	// fills; routing to os.Stderr corrupts the bubbletea render. Headless
+	// visibility of child stderr is deferred to a future log sink.
+	go drainAndDiscard(stderr)
 	return &child{cmd: cmd, rpc: transport.NewEndpoint(stdout, stdin)}, nil
 }
 
-func relayStderr(id string, r io.Reader) {
+func (c *child) wait() error { return c.cmd.Wait() }
+
+func drainAndDiscard(r io.Reader) {
 	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, stderrScanInit), stderrScanMax)
 	for sc.Scan() {
-		fmt.Fprintf(os.Stderr, "[%s] %s\n", id, sc.Text())
+		_ = sc.Text()
 	}
+	_, _ = io.Copy(io.Discard, r)
 }

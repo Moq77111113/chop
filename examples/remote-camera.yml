@@ -1,0 +1,60 @@
+name: remote-camera
+description: |
+  IP camera over WAN. Two degradable segments (access, core).
+  cam → access link → relay (mediamtx) → core link → player (ffmpeg null sink).
+
+blocks:
+  - id: cam-1
+    type: source
+    config:
+      file: testdata/pattern.mp4
+      listen: 127.0.0.1:6710
+      fps: 30
+
+  - id: access-link
+    type: link
+    config:
+      upstream: rtsp://127.0.0.1:6710/cam1
+      serve_at: 127.0.0.1:6720
+    controls:
+      loss: 0.0
+      latency_ms: 0
+      jitter_ms: 0
+      bandwidth_kbps: 0
+
+  - id: relay
+    type: process
+    config:
+      cmd: mediamtx
+      args: ["examples/remote-camera/mediamtx.yml"]
+
+  - id: core-link
+    type: link
+    config:
+      upstream: rtsp://127.0.0.1:8554/cam1
+      serve_at: 127.0.0.1:6730
+    controls:
+      loss: 0.0
+      latency_ms: 0
+      jitter_ms: 0
+      bandwidth_kbps: 0
+
+  # headless sink so the demo runs on CI / over SSH. for a real video window
+  # on a workstation, swap cmd→ffplay and drop the "-f null -" tail:
+  #   cmd: ffplay
+  #   args: ["-loglevel","warning","-rtsp_transport","udp",
+  #          "-fflags","nobuffer","-i","rtsp://127.0.0.1:6730/cam1"]
+  - id: player
+    type: process
+    config:
+      cmd: ffmpeg
+      args:
+        - "-loglevel"
+        - "warning"
+        - "-rtsp_transport"
+        - "udp"
+        - "-i"
+        - "rtsp://127.0.0.1:6730/cam1"
+        - "-f"
+        - "null"
+        - "-"

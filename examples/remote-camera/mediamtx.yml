@@ -1,0 +1,9 @@
+logLevel: info
+logDestinations: [stdout]
+
+rtspAddress: :8554
+rtspTransports: [udp]
+
+paths:
+  cam1:
+    source: rtsp://127.0.0.1:6720/cam1

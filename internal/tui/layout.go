@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moq77111113/chop/internal/tui/components/coach"
@@ -9,6 +12,7 @@ import (
 	"github.com/moq77111113/chop/internal/tui/components/focused"
 	"github.com/moq77111113/chop/internal/tui/components/help"
 	"github.com/moq77111113/chop/internal/tui/components/linklist"
+	"github.com/moq77111113/chop/internal/tui/components/processpane"
 	"github.com/moq77111113/chop/internal/tui/components/sourcepane"
 	"github.com/moq77111113/chop/internal/tui/components/toast"
 	"github.com/moq77111113/chop/internal/tui/data"
@@ -146,8 +150,50 @@ func (a *App) rightPaneContent(width, height int) string {
 			HasSnap: has,
 			URL:     url,
 		}, a.styles.sourcePane, width, height)
+	case data.BlockTypeProcess:
+		snap, has := a.processes[r.ID]
+		return processpane.Render(processpane.Props{
+			ID:      r.ID,
+			Type:    r.Type,
+			Snap:    snap,
+			HasSnap: has,
+			Cmd:     a.processCmdLine(r.ID),
+			Cwd:     a.processCwd(r.ID),
+		}, a.styles.processPane, width, height)
 	}
 	return a.theme.Subtle.Render("unknown block type: " + r.Type)
+}
+
+func (a *App) processCmdLine(id string) string {
+	raw, ok := a.configs[id]
+	if !ok {
+		return ""
+	}
+	var pc struct {
+		Cmd  string   `json:"cmd"`
+		Args []string `json:"args"`
+	}
+	if json.Unmarshal(raw, &pc) != nil {
+		return ""
+	}
+	if len(pc.Args) == 0 {
+		return pc.Cmd
+	}
+	return pc.Cmd + " " + strings.Join(pc.Args, " ")
+}
+
+func (a *App) processCwd(id string) string {
+	raw, ok := a.configs[id]
+	if !ok {
+		return ""
+	}
+	var pc struct {
+		Cwd string `json:"cwd"`
+	}
+	if json.Unmarshal(raw, &pc) != nil {
+		return ""
+	}
+	return pc.Cwd
 }
 
 // leftPaneContent stacks the link list on top of the events ticker.

@@ -39,6 +39,11 @@ blocks:
       jitter_ms: 0
       bandwidth_kbps: 0
 
+  # headless sink so the demo runs on CI / over SSH. for a real video window
+  # on a workstation, swap cmd→ffplay and drop the "-f null -" tail:
+  #   cmd: ffplay
+  #   args: ["-loglevel","warning","-rtsp_transport","udp",
+  #          "-fflags","nobuffer","-i","rtsp://127.0.0.1:6730/cam1"]
   - id: player
     type: process
     config:

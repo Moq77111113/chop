@@ -2,11 +2,20 @@ package supervisor
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/moq77111113/chop/internal/transport"
 )
 
-const eventsBufferSize = 256
+const (
+	eventsBufferSize = 256
+
+	// Supervisor-level lifecycle event kinds emitted on the events bus
+	// when Kill / Restart fire. Block-emitted events keep their own
+	// kinds (e.g. process.started, process.exited).
+	EventBlockKillRequested = "block.kill_requested"
+	EventBlockRestarted     = "block.restarted"
+)
 
 // Event is a block-emitted event tagged with its origin block id. The
 // supervisor multiplexes events from every spawned block into one bus so
@@ -25,10 +34,8 @@ func (s *Supervisor) Events() <-chan Event { return s.events }
 
 func (s *Supervisor) forwardEvents(blockID string, ep *transport.Endpoint) {
 	ep.OnEvent(func(ev transport.Event) {
-		select {
-		case s.events <- Event{BlockID: blockID, Kind: ev.Kind, TsMs: ev.TsMs, Payload: ev.Payload}:
-		default:
-			// bus full — drop the event rather than stall the dispatch goroutine
-		}
+		s.emit(Event{BlockID: blockID, Kind: ev.Kind, TsMs: ev.TsMs, Payload: ev.Payload})
 	})
 }
+
+func nowMs() int64 { return time.Now().UnixMilli() }

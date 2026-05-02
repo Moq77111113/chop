@@ -19,6 +19,8 @@ type Keymap struct {
 	ResetAll   key.Binding
 	Copy       key.Binding
 	ToggleFeed key.Binding
+	Kill       key.Binding
+	Restart    key.Binding
 }
 
 // DefaultKeymap returns the canonical bindings.
@@ -34,8 +36,10 @@ func DefaultKeymap() Keymap {
 		Back:       key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Zero:       key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "zero knob")),
 		ResetLink:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reset link")),
-		ResetAll:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "reset all")),
+		ResetAll:   key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "reset all")),
 		Copy:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy as flags")),
 		ToggleFeed: key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "toggle feed")),
+		Kill:       key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "kill block")),
+		Restart:    key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "restart block")),
 	}
 }

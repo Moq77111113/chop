@@ -15,6 +15,7 @@ const (
 	StatusRunning  Status = "running"
 	StatusDegraded Status = "degraded"
 	StatusStopped  Status = "stopped"
+	StatusDown     Status = "down"
 )
 
 // Info is the static identity of a block, returned to the supervisor on demand.

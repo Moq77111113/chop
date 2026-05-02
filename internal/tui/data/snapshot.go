@@ -35,6 +35,8 @@ func MapState(s block.Status) LinkState {
 		return StateDegraded
 	case block.StatusStopped:
 		return StateStopped
+	case block.StatusDown:
+		return StateDown
 	}
 	return StateStarting
 }

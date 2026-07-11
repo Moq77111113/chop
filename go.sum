@@ -1,5 +1,5 @@
-github.com/Eyevinn/mp4ff v0.51.0 h1:ZYdHFXEcB3kJkCeCHMHl/tbCm64FJsD2XOU0Sj+ME2M=
-github.com/Eyevinn/mp4ff v0.51.0/go.mod h1:hJNUUqOBryLAzUW9wpCJyw2HaI+TCd2rUPhafoS5lgg=
+github.com/Eyevinn/mp4ff v0.53.0 h1:aK4OF9gFwjrqvHRf0znEMCUVupgRFR1LB8OVpw9z1RA=
+github.com/Eyevinn/mp4ff v0.53.0/go.mod h1:AhC+bOI7GSZmzuN4zFY9U76qMedbHI+8BdQXWrC9+8U=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=

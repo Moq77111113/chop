@@ -3,7 +3,7 @@ module github.com/moq77111113/chop
 go 1.26.0
 
 require (
-	github.com/Eyevinn/mp4ff v0.51.0
+	github.com/Eyevinn/mp4ff v0.53.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/bluenviron/gortsplib/v5 v5.5.1
 	github.com/charmbracelet/bubbles v1.0.0

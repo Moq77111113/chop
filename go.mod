@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/muesli/termenv v0.16.0
-	github.com/pion/rtp v1.10.1
+	github.com/pion/rtp v1.10.5
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
